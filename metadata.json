@@ -1,0 +1,9 @@
+
+{
+  "name": "Hands-Free Capture App",
+  "description": "A voice-controlled application for capturing contact information, media, and other data hands-free. Features different modes for contact management and media capture.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
