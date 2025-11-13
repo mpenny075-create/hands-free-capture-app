@@ -28,15 +28,15 @@ const CalendarView: React.FC<CalendarViewProps> = ({ show, onClose, reminders })
 
   return (
     <div className={`fixed inset-0 z-40 transition-opacity duration-300 ${show ? 'pointer-events-auto bg-black/50' : 'pointer-events-none opacity-0'}`}>
-      <div className={`fixed top-0 left-20 w-[calc(100vw-80px)] h-full bg-slate-900 text-white p-6 transition-transform duration-300 ease-in-out ${show ? 'translate-x-0' : 'translate-x-full'}`}>
+      <div className={`fixed top-0 md:left-20 w-full md:w-[calc(100vw-80px)] h-full bg-slate-900 text-white p-6 pb-24 md:pb-6 transition-transform duration-300 ease-in-out ${show ? 'translate-x-0' : 'translate-x-full'}`}>
         <header className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold">CALENDAR & REMINDERS</h2>
             <button onClick={onClose} title="Close" className="hover:text-red-500 text-2xl"><i className="fas fa-times"></i></button>
         </header>
-        <div className="flex h-[calc(100%-70px)] gap-6">
+        <div className="flex flex-col md:flex-row h-[calc(100%-70px)] gap-6">
             {/* Calendar Grid */}
-            <div className="flex-[3] bg-slate-800/80 rounded-lg">
-                 <div className="grid grid-cols-7 text-center font-bold text-slate-400 border-b border-slate-700">
+            <div className="flex-1 md:flex-[3] bg-slate-800/80 rounded-lg overflow-y-auto">
+                 <div className="grid grid-cols-7 text-center font-bold text-slate-400 border-b border-slate-700 sticky top-0 bg-slate-800/80">
                     {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => <div key={day} className="p-2">{day}</div>)}
                 </div>
                 <div className="grid grid-cols-7">
