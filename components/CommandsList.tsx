@@ -1,4 +1,3 @@
-
 import React from 'react';
 
 interface CommandsListProps {
@@ -37,13 +36,17 @@ const CommandsList: React.FC<CommandsListProps> = ({ show, onClose }) => {
 
         <Section title="Global Commands">
             <CommandItem command="commands list" description="Shows this list of commands." />
-            <CommandItem command="close list / hide commands" description="Hides this list of commands." />
+            <CommandItem command="close list" description="Hides this list of commands." />
             <CommandItem command="show contacts" description="Opens the contact management view." />
-            <CommandItem command="open camera / open media" description="Opens the camera and media recording view." />
+            <CommandItem command="open camera" description="Opens the camera and media recording view." />
+            <CommandItem command="show calendar" description="Opens the calendar and reminders view." />
             <CommandItem command="return to main" description="Closes any open view and returns to the main screen." />
         </Section>
         
         <Section title="Contacts View">
+            <CommandItem command="load my contacts" description="Loads a sample list of contacts." />
+            <CommandItem command="call [name / contact #]" description="Opens details for a contact. Ex: 'call Jane Doe' or 'call contact 2'" />
+            <CommandItem command="email [name / contact #]" description="Opens details for a contact. Ex: 'email John'" />
             <CommandItem command="capture contact" description="Opens the panel to add a new contact." />
             <CommandItem command="capture confirmation" description="Opens the panel to add a new confirmation." />
             <div className="pl-4 border-l-2 border-slate-700 mt-4">
@@ -64,12 +67,22 @@ const CommandsList: React.FC<CommandsListProps> = ({ show, onClose }) => {
                 <CommandItem command="cancel confirmation" description="Cancels adding the new confirmation." />
             </div>
         </Section>
+        
+        <Section title="Calendar & Reminders">
+             <CommandItem command="add reminder [text]" description="Adds a new reminder. Ex: 'add reminder call mom tomorrow'" />
+             <CommandItem command="remind me to [text]" description="Alternate way to add a reminder." />
+        </Section>
 
         <Section title="Media View">
-            <CommandItem command="take a picture / take a photo" description="Captures a single photo from the camera." />
-            <CommandItem command="record video [for X seconds/minutes]" description="Records video. Specify an optional duration." />
-            <CommandItem command="record sound [for X seconds/minutes]" description="Records audio. Specify an optional duration." />
-            <CommandItem command="stop recording" description="Stops any active video or audio recording." />
+            <CommandItem command="take a picture" description="Captures a single photo instantly." />
+            <CommandItem command="take a picture timer [X]" description="Captures one photo after an X-second countdown." />
+            <CommandItem command="take [X] pictures" description="Takes X photos with a 3-second countdown before each." />
+            <CommandItem command="take [X] pictures timer [Y]" description="Takes X photos with a Y-second countdown before each." />
+            <CommandItem command="record video for [X] seconds" description="Records video for a specific duration." />
+            <CommandItem command="stop recording" description="Stops any active video recording." />
+            <CommandItem command="record sound" description="Starts recording audio from the microphone." />
+            <CommandItem command="stop recording sound" description="Stops the active audio recording." />
+            <CommandItem command="switch camera" description="Cycles to the next available camera." />
         </Section>
 
       </div>
