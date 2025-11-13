@@ -57,7 +57,6 @@ const ContactsView: React.FC<ContactsViewProps> = (props) => {
         const opts = { multiple: true };
 
         try {
-            // FIX: Explicitly type deviceContacts as any[] to avoid type errors with experimental APIs.
             const deviceContacts: any[] = await (navigator.contacts as any).select(props, opts);
             if (deviceContacts.length > 0) {
                 const formattedContacts = deviceContacts.map((contact: any) => {
@@ -74,7 +73,6 @@ const ContactsView: React.FC<ContactsViewProps> = (props) => {
                 onImportContacts(formattedContacts);
             }
         } catch (ex) {
-            // Handle user cancellation or other errors
             console.log('Import cancelled or failed.', ex);
         }
     };
@@ -100,22 +98,20 @@ const ContactsView: React.FC<ContactsViewProps> = (props) => {
     }
 
     return (
-        <div className={`fixed inset-0 z-40 ${show ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-            <div className={`fixed top-0 bottom-0 bg-slate-800 text-white transition-all duration-300 ease-in-out left-20
-                ${isPanelOpen ? 'right-[30vw]' : 'right-0'}
-                ${show ? 'translate-x-0' : 'translate-x-full'}
-            `}>
+        <div className={`fixed inset-0 z-40 md:left-20 transition-transform duration-300 ease-in-out ${show ? 'translate-x-0' : 'translate-x-full'}`}>
+            {/* List Panel (Master View) */}
+            <div className={`absolute inset-0 bg-slate-800 text-white transition-transform duration-300 ease-in-out ${isPanelOpen ? '-translate-x-full md:translate-x-0' : 'translate-x-0'}`}>
                 <div className="p-4 flex flex-col h-full">
                     <header className="flex justify-between items-center mb-4">
                         <h2 className="text-xl font-bold">CONTACTS</h2>
                         <div className="flex items-center gap-4 text-xl">
                             <button onClick={handleImportContacts} title="Import from Device" className="hover:text-yellow-400"><i className="fas fa-mobile-alt"></i></button>
-                            <button onClick={() => setCaptureMode(CaptureMode.CONTACT)} title="Add Contact" className="hover:text-teal-400"><i className="fas fa-user-plus"></i></button>
-                            <button onClick={() => setCaptureMode(CaptureMode.CONFIRMATION)} title="Add Confirmation" className="hover:text-purple-400"><i className="fas fa-receipt"></i></button>
+                            <button onClick={() => { setCaptureMode(CaptureMode.CONTACT); setSelectedContact(null); }} title="Add Contact" className="hover:text-teal-400"><i className="fas fa-user-plus"></i></button>
+                            <button onClick={() => { setCaptureMode(CaptureMode.CONFIRMATION); setSelectedContact(null); }} title="Add Confirmation" className="hover:text-purple-400"><i className="fas fa-receipt"></i></button>
                             <button onClick={handleMainClose} title="Close" className="hover:text-red-500"><i className="fas fa-times"></i></button>
                         </div>
                     </header>
-                    <div className="flex-grow overflow-y-auto">
+                    <div className="flex-grow overflow-y-auto pb-20 md:pb-0">
                         {contacts.map((contact, index) => (
                             <div key={contact.id} onClick={() => setSelectedContact(contact)} className="flex items-center gap-4 p-2 rounded-md cursor-pointer hover:bg-slate-700">
                                 <span className="font-mono text-slate-500 w-6 text-center">{index + 1}.</span>
@@ -128,100 +124,102 @@ const ContactsView: React.FC<ContactsViewProps> = (props) => {
                 </div>
             </div>
 
-            <div className={`fixed top-0 bottom-0 right-0 w-[30vw] bg-white shadow-2xl p-6 transition-transform duration-300 ease-in-out
+            {/* Details/Capture Panel (Detail View) */}
+            <div className={`absolute top-0 right-0 w-full md:w-[30vw] h-full bg-white shadow-2xl p-6 transition-transform duration-300 ease-in-out
                 ${isPanelOpen ? 'translate-x-0' : 'translate-x-full'}
             `}>
-                {(isPanelOpen) && (
-                    <div className="text-gray-800 flex flex-col h-full">
-                         <header className="flex justify-between items-center mb-6 pb-4 border-b">
+                <div className="text-gray-800 flex flex-col h-full">
+                     <header className="flex justify-between items-center mb-6 pb-4 border-b">
+                        <div className="flex items-center gap-4">
+                            <button onClick={handlePanelClose} title="Back to list" className="md:hidden text-2xl hover:text-blue-500"><i className="fas fa-arrow-left"></i></button>
                             <h2 className="text-2xl font-bold">{getPanelTitle()}</h2>
-                            <button onClick={handlePanelClose} title="Close" className="hover:text-red-500"><i className="fas fa-times"></i></button>
-                        </header>
-                        
-                        {/* VIEW SELECTED CONTACT */}
-                        {selectedContact && captureMode === CaptureMode.GENERAL && (
-                             <>
-                                <div className="space-y-4 flex-grow">
-                                    <div>
-                                        <label className="text-sm font-bold text-gray-500">Name</label>
-                                        <p className="text-lg">{selectedContact.name}</p>
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-bold text-gray-500">Status</label>
-                                        <p className={`text-lg capitalize ${selectedContact.status === 'online' ? 'text-green-600' : 'text-gray-600'}`}>{selectedContact.status}</p>
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-bold text-gray-500">Phone</label>
-                                        <a href={selectedContact.phoneUrl} className="text-lg text-blue-600 hover:underline">{selectedContact.phone || 'N/A'}</a>
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-bold text-gray-500">Email</label>
-                                        <a href={selectedContact.emailUrl} className="text-lg text-blue-600 hover:underline">{selectedContact.email || 'N/A'}</a>
-                                    </div>
-                                    <div>
-                                        <label className="text-sm font-bold text-gray-500">Details</label>
-                                        <p className="text-lg bg-gray-50 p-2 rounded">{selectedContact.details || 'No details provided.'}</p>
-                                    </div>
+                        </div>
+                        <button onClick={handlePanelClose} title="Close" className="hidden md:block hover:text-red-500"><i className="fas fa-times"></i></button>
+                    </header>
+                    
+                    {/* VIEW SELECTED CONTACT */}
+                    {selectedContact && captureMode === CaptureMode.GENERAL && (
+                         <>
+                            <div className="space-y-4 flex-grow overflow-y-auto">
+                                <div>
+                                    <label className="text-sm font-bold text-gray-500">Name</label>
+                                    <p className="text-lg">{selectedContact.name}</p>
                                 </div>
-                                <div className="mt-auto pt-4 border-t flex gap-4">
-                                    <a href={selectedContact.phoneUrl} className={`px-5 py-2 rounded-md font-semibold text-white transition-colors ${selectedContact.phoneUrl ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'}`}>
-                                        <i className="fas fa-phone mr-2"></i> Call
-                                    </a>
-                                    <a href={selectedContact.emailUrl} className={`px-5 py-2 rounded-md font-semibold text-white transition-colors ${selectedContact.emailUrl ? 'bg-sky-600 hover:bg-sky-700' : 'bg-gray-400 cursor-not-allowed'}`}>
-                                        <i className="fas fa-envelope mr-2"></i> Email
-                                    </a>
+                                <div>
+                                    <label className="text-sm font-bold text-gray-500">Status</label>
+                                    <p className={`text-lg capitalize ${selectedContact.status === 'online' ? 'text-green-600' : 'text-gray-600'}`}>{selectedContact.status}</p>
                                 </div>
-                            </>
-                        )}
-                        
-                        {/* CAPTURE CONTACT */}
-                        {captureMode === CaptureMode.CONTACT && (
-                            <>
-                                <div className="flex-grow">
-                                    <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-3 text-md items-center">
-                                        <strong className="text-gray-600">Name:</strong>
-                                        <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newContactData.name || '...'}</span>
+                                <div>
+                                    <label className="text-sm font-bold text-gray-500">Phone</label>
+                                    <a href={selectedContact.phoneUrl} className="text-lg text-blue-600 hover:underline">{selectedContact.phone || 'N/A'}</a>
+                                </div>
+                                <div>
+                                    <label className="text-sm font-bold text-gray-500">Email</label>
+                                    <a href={selectedContact.emailUrl} className="text-lg text-blue-600 hover:underline">{selectedContact.email || 'N/A'}</a>
+                                </div>
+                                <div>
+                                    <label className="text-sm font-bold text-gray-500">Details</label>
+                                    <p className="text-lg bg-gray-50 p-2 rounded">{selectedContact.details || 'No details provided.'}</p>
+                                </div>
+                            </div>
+                            <div className="mt-auto pt-4 border-t flex gap-4">
+                                <a href={selectedContact.phoneUrl} className={`px-5 py-2 rounded-md font-semibold text-white transition-colors ${selectedContact.phoneUrl ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-400 cursor-not-allowed'}`}>
+                                    <i className="fas fa-phone mr-2"></i> Call
+                                </a>
+                                <a href={selectedContact.emailUrl} className={`px-5 py-2 rounded-md font-semibold text-white transition-colors ${selectedContact.emailUrl ? 'bg-sky-600 hover:bg-sky-700' : 'bg-gray-400 cursor-not-allowed'}`}>
+                                    <i className="fas fa-envelope mr-2"></i> Email
+                                </a>
+                            </div>
+                        </>
+                    )}
+                    
+                    {/* CAPTURE CONTACT */}
+                    {captureMode === CaptureMode.CONTACT && (
+                        <>
+                            <div className="flex-grow">
+                                <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-3 text-md items-center">
+                                    <strong className="text-gray-600">Name:</strong>
+                                    <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newContactData.name || '...'}</span>
 
-                                        <strong className="text-gray-600">Phone:</strong>
-                                        <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newContactData.phone || '...'}</span>
-                                        
-                                        <strong className="text-gray-600">Email:</strong>
-                                        <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newContactData.email || '...'}</span>
-                                        
-                                        <strong className="text-gray-600 self-start pt-1">Details:</strong>
-                                        <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newContactData.details || '...'}</span>
-                                    </div>
+                                    <strong className="text-gray-600">Phone:</strong>
+                                    <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newContactData.phone || '...'}</span>
+                                    
+                                    <strong className="text-gray-600">Email:</strong>
+                                    <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newContactData.email || '...'}</span>
+                                    
+                                    <strong className="text-gray-600 self-start pt-1">Details:</strong>
+                                    <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newContactData.details || '...'}</span>
                                 </div>
-                                <div className="mt-auto pt-4 border-t flex gap-4">
-                                    <button onClick={props.onSave} className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors">Save</button>
-                                    <button onClick={props.onCancel} className="px-5 py-2 bg-gray-500 text-white font-semibold rounded-md hover:bg-gray-600 transition-colors">Cancel</button>
-                                </div>
-                            </>
-                        )}
+                            </div>
+                            <div className="mt-auto pt-4 border-t flex gap-4">
+                                <button onClick={props.onSave} className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors">Save</button>
+                                <button onClick={props.onCancel} className="px-5 py-2 bg-gray-500 text-white font-semibold rounded-md hover:bg-gray-600 transition-colors">Cancel</button>
+                            </div>
+                        </>
+                    )}
 
-                        {/* CAPTURE CONFIRMATION */}
-                        {captureMode === CaptureMode.CONFIRMATION && (
-                             <>
-                                <div className="flex-grow">
-                                    <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-3 text-md items-center">
-                                        <strong className="text-gray-600">Type:</strong>
-                                        <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newConfirmationData.type || '...'}</span>
+                    {/* CAPTURE CONFIRMATION */}
+                    {captureMode === CaptureMode.CONFIRMATION && (
+                         <>
+                            <div className="flex-grow">
+                                <div className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-3 text-md items-center">
+                                    <strong className="text-gray-600">Type:</strong>
+                                    <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newConfirmationData.type || '...'}</span>
 
-                                        <strong className="text-gray-600">Name:</strong>
-                                        <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newConfirmationData.name || '...'}</span>
+                                    <strong className="text-gray-600">Name:</strong>
+                                    <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newConfirmationData.name || '...'}</span>
 
-                                        <strong className="text-gray-600">Confirmation #:</strong>
-                                        <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newConfirmationData.number || '...'}</span>
-                                    </div>
+                                    <strong className="text-gray-600">Confirmation #:</strong>
+                                    <span className="font-mono p-1 bg-gray-100 rounded min-h-[28px] block">{newConfirmationData.number || '...'}</span>
                                 </div>
-                                <div className="mt-auto pt-4 border-t flex gap-4">
-                                    <button onClick={props.onSaveConfirmation} className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors">Save</button>
-                                    <button onClick={props.onCancelConfirmation} className="px-5 py-2 bg-gray-500 text-white font-semibold rounded-md hover:bg-gray-600 transition-colors">Cancel</button>
-                                </div>
-                             </>
-                        )}
-                    </div>
-                )}
+                            </div>
+                            <div className="mt-auto pt-4 border-t flex gap-4">
+                                <button onClick={props.onSaveConfirmation} className="px-5 py-2 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700 transition-colors">Save</button>
+                                <button onClick={props.onCancelConfirmation} className="px-5 py-2 bg-gray-500 text-white font-semibold rounded-md hover:bg-gray-600 transition-colors">Cancel</button>
+                            </div>
+                         </>
+                    )}
+                </div>
             </div>
         </div>
     );
