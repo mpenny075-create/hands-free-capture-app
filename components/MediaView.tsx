@@ -1,276 +1,360 @@
-
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { MediaCommand, Recording, RecordingType } from '../types';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import { MediaItem, MediaCommand } from '../types';
 
 interface MediaViewProps {
   show: boolean;
   onClose: () => void;
+  onCaptureMedia: (item: Omit<MediaItem, 'id' | 'timestamp'>) => void;
+  onRecordingStateChange: (isRecording: boolean) => void;
   command: MediaCommand | null;
   onCommandComplete: () => void;
-  onRecordingStateChange: (isRecording: boolean, type: RecordingType | null) => void;
+  mediaItems: MediaItem[];
 }
 
-const MediaView: React.FC<MediaViewProps> = ({ show, onClose, command, onCommandComplete, onRecordingStateChange }) => {
+const MediaView: React.FC<MediaViewProps> = ({ 
+    show, onClose, onCaptureMedia, onRecordingStateChange, command, onCommandComplete, mediaItems 
+}) => {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef = useRef<Blob[]>([]);
-  const timerRef = useRef<number | null>(null);
-  const elapsedTimerRef = useRef<number | null>(null);
-  
-  const [photos, setPhotos] = useState<Recording[]>([]);
-  const [recordings, setRecordings] = useState<Recording[]>([]);
+  const audioRecorderRef = useRef<MediaRecorder | null>(null);
+  const photoIntervalRef = useRef<number | null>(null);
+  const videoTimeoutRef = useRef<number | null>(null);
+  const recordingTimerIntervalRef = useRef<number | null>(null);
 
-  // State for camera and recording management
-  const [isCameraReady, setIsCameraReady] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
   const [isRecording, setIsRecording] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState(0);
+  const [isAudioRecording, setIsAudioRecording] = useState(false);
+  const [isStreamReady, setIsStreamReady] = useState(false);
+  const [availableCameras, setAvailableCameras] = useState<MediaDeviceInfo[]>([]);
+  const [currentCameraIndex, setCurrentCameraIndex] = useState(0);
+
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [photosToTake, setPhotosToTake] = useState(0);
+  const [recordingTimer, setRecordingTimer] = useState<number | null>(null);
 
-  // Buffer for commands that arrive before the camera is ready
-  const pendingCommandRef = useRef<MediaCommand | null>(null);
+  useEffect(() => {
+    onRecordingStateChange(isRecording || isAudioRecording);
+  }, [isRecording, isAudioRecording, onRecordingStateChange]);
 
-  const cleanup = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-      streamRef.current = null;
+  const cleanupTimers = () => {
+    if (photoIntervalRef.current) clearInterval(photoIntervalRef.current);
+    if (videoTimeoutRef.current) clearTimeout(videoTimeoutRef.current);
+    if (recordingTimerIntervalRef.current) clearInterval(recordingTimerIntervalRef.current);
+    photoIntervalRef.current = null;
+    videoTimeoutRef.current = null;
+    recordingTimerIntervalRef.current = null;
+    setCountdown(null);
+    setRecordingTimer(null);
+    setPhotosToTake(0);
+  };
+
+  const startStream = useCallback(async () => {
+    if (stream) {
+        stream.getTracks().forEach(track => track.stop());
     }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null;
+    setIsStreamReady(false);
+
+    let cameras = availableCameras;
+    if (cameras.length === 0) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        cameras = devices.filter(device => device.kind === 'videoinput');
+        setAvailableCameras(cameras);
     }
+
+    if (cameras.length > 0) {
+        const constraints = {
+            video: { deviceId: { exact: cameras[currentCameraIndex].deviceId } },
+            audio: true
+        };
+        try {
+            const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+            setStream(mediaStream);
+            if (videoRef.current) {
+                videoRef.current.srcObject = mediaStream;
+            }
+        } catch (err) {
+            console.error("Error accessing camera:", err);
+        }
+    }
+  }, [stream, availableCameras, currentCameraIndex]);
+  
+  const handleStopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
     }
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
-    
-    setIsCameraReady(false);
-    setIsRecording(false);
-    setElapsedTime(0);
-    setCountdown(null);
-    pendingCommandRef.current = null; // Clear any pending command
-    onRecordingStateChange(false, null);
-  }, [onRecordingStateChange]);
+    cleanupTimers();
+  }, []);
 
-  // Effect to initialize and tear down the camera stream
   useEffect(() => {
     if (show) {
-      const getMedia = async () => {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-          streamRef.current = stream;
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-          }
-        } catch (err) {
-          console.error("Error accessing media devices.", err);
-          alert("Could not access camera or microphone. Please check permissions.");
-          onClose();
-        }
-      };
-      getMedia();
+      startStream();
     } else {
-      cleanup();
-    }
-    return () => cleanup();
-  }, [show, cleanup, onClose]);
-
-
-  const handleTakePicture = useCallback(async (count: number = 1, delay: number = 0) => {
-    if (!videoRef.current || !isCameraReady) return;
-
-    if (delay > 0) {
-      for (let i = delay; i > 0; i--) {
-        setCountdown(i);
-        await new Promise(res => setTimeout(res, 1000));
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
       }
-      setCountdown(null);
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+      if (isRecording) {
+        handleStopRecording();
+      }
+      cleanupTimers();
+      setIsStreamReady(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [show]);
+
+  useEffect(() => {
+    if (show && availableCameras.length > 0) {
+        startStream();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCameraIndex]);
+
+  const handleTakePhoto = useCallback(() => {
+    if (videoRef.current && isStreamReady) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        onCaptureMedia({type: 'photo', src: canvas.toDataURL('image/jpeg')});
+      }
+    }
+  }, [onCaptureMedia, isStreamReady]);
+
+  useEffect(() => {
+    if (photosToTake > 0 && isStreamReady) {
+        const timerDuration = command?.type === 'take-photos' && command.timer ? command.timer : 3;
+        setCountdown(timerDuration);
+        photoIntervalRef.current = window.setInterval(() => {
+            setCountdown(prev => {
+                if (prev === null || prev <= 1) {
+                    clearInterval(photoIntervalRef.current!);
+                    handleTakePhoto();
+                    setPhotosToTake(p => p - 1);
+                    return null;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+    } else if (photosToTake === 0 && command?.type === 'take-photos' && command.count > 1) {
+        onCommandComplete();
     }
     
-    for (let i = 0; i < count; i++) {
-        const video = videoRef.current;
-        const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const context = canvas.getContext('2d');
-        if (context) {
-            // Flash effect
-            const flash = document.createElement('div');
-            flash.className = 'absolute inset-0 bg-white opacity-80';
-            video.parentElement?.appendChild(flash);
-            setTimeout(() => flash.remove(), 150);
-            
-            context.drawImage(video, 0, 0, canvas.width, canvas.height);
-            const dataUrl = canvas.toDataURL('image/jpeg');
-            const newPhoto: Recording = { url: dataUrl, type: 'photo', name: `photo-${Date.now()}.jpg` };
-            setPhotos(prev => [newPhoto, ...prev]);
+    return () => {
+        if(photoIntervalRef.current) clearInterval(photoIntervalRef.current);
+    }
+  }, [photosToTake, isStreamReady, handleTakePhoto, onCommandComplete, command]);
+
+
+  const handleStartRecording = useCallback((duration?: number) => {
+    if (stream && !isRecording && isStreamReady) {
+        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+        mediaRecorderRef.current = recorder;
+        const recordedChunks: Blob[] = [];
+
+        recorder.ondataavailable = (event) => {
+            if (event.data.size > 0) recordedChunks.push(event.data);
+        };
+
+        recorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            onCaptureMedia({ type: 'video', src: url });
+            setIsRecording(false);
+            mediaRecorderRef.current = null;
+            cleanupTimers();
+        };
+        
+        recorder.start();
+        setIsRecording(true);
+
+        if (duration) {
+            setRecordingTimer(Math.round(duration / 1000));
+            recordingTimerIntervalRef.current = window.setInterval(() => {
+                setRecordingTimer(t => (t !== null && t > 0) ? t - 1 : null);
+            }, 1000);
+            videoTimeoutRef.current = window.setTimeout(() => {
+                handleStopRecording();
+            }, duration);
         }
-        if (i < count - 1) await new Promise(res => setTimeout(res, 500));
     }
-  }, [isCameraReady]);
+  }, [stream, isRecording, onCaptureMedia, isStreamReady, handleStopRecording]);
 
-  const handleStopRecording = useCallback(() => {
-    if (mediaRecorderRef.current?.state === 'recording') {
-        mediaRecorderRef.current.stop();
-    }
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
-    setIsRecording(false);
-    setElapsedTime(0);
-    onRecordingStateChange(false, null);
-  }, [onRecordingStateChange]);
+    const handleStartAudioRecording = useCallback(async () => {
+        if (isAudioRecording) return;
+        try {
+            const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            const recorder = new MediaRecorder(audioStream, { mimeType: 'audio/webm' });
+            audioRecorderRef.current = recorder;
+            const recordedChunks: Blob[] = [];
 
-  const handleStartRecording = useCallback((type: 'video' | 'audio', duration?: number) => {
-    if (!streamRef.current || !isCameraReady || isRecording) return;
-    
-    chunksRef.current = [];
-    const mimeType = type === 'video' ? 'video/webm' : 'audio/webm';
-    mediaRecorderRef.current = new MediaRecorder(streamRef.current, { mimeType });
+            recorder.ondataavailable = (event) => {
+                if (event.data.size > 0) recordedChunks.push(event.data);
+            };
 
-    mediaRecorderRef.current.ondataavailable = (event) => chunksRef.current.push(event.data);
+            recorder.onstop = () => {
+                const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+                const url = URL.createObjectURL(blob);
+                onCaptureMedia({ type: 'audio', src: url });
+                setIsAudioRecording(false);
+                audioRecorderRef.current = null;
+                audioStream.getTracks().forEach(track => track.stop());
+            };
+            
+            recorder.start();
+            setIsAudioRecording(true);
+        } catch (err) {
+            console.error("Error accessing microphone:", err);
+        }
+    }, [isAudioRecording, onCaptureMedia]);
 
-    mediaRecorderRef.current.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const name = `${type}-${new Date().toISOString()}_${Math.round(elapsedTime)}s.webm`;
-        setRecordings(prev => [{ url, type, name }, ...prev]);
-        chunksRef.current = [];
-    };
+    const handleStopAudioRecording = useCallback(() => {
+        if (audioRecorderRef.current && audioRecorderRef.current.state === 'recording') {
+            audioRecorderRef.current.stop();
+        }
+    }, []);
 
-    mediaRecorderRef.current.start(1000); // Collect data every second
-    setIsRecording(true);
-    setElapsedTime(0);
-    onRecordingStateChange(true, type);
-
-    elapsedTimerRef.current = window.setInterval(() => setElapsedTime(t => t + 1), 1000);
-
-    if (duration) {
-        timerRef.current = window.setTimeout(handleStopRecording, duration * 1000);
-    }
-  }, [isCameraReady, isRecording, onRecordingStateChange, handleStopRecording, elapsedTime]);
+  const handleSwitchCamera = useCallback(() => {
+      if (availableCameras.length > 1) {
+          setCurrentCameraIndex(prev => (prev + 1) % availableCameras.length);
+      }
+  }, [availableCameras.length]);
   
-  // --- Definitive Command Handling Fix ---
-  // 1. Buffer the command when it arrives.
-  useEffect(() => {
-    if (command) {
-        pendingCommandRef.current = command;
-    }
-  }, [command]);
+  const handleSinglePhotoTimer = useCallback((duration: number) => {
+      setCountdown(duration);
+      photoIntervalRef.current = window.setInterval(() => {
+          setCountdown(prev => {
+              if (prev === null || prev <= 1) {
+                  clearInterval(photoIntervalRef.current!);
+                  handleTakePhoto();
+                  onCommandComplete();
+                  return null;
+              }
+              return prev - 1;
+          })
+      }, 1000);
+  }, [handleTakePhoto, onCommandComplete]);
 
-  // 2. Execute the buffered command ONLY when the camera is ready.
   useEffect(() => {
-    const executeCommand = async () => {
-        if (isCameraReady && pendingCommandRef.current) {
-            const cmd = pendingCommandRef.current;
-            pendingCommandRef.current = null; // Clear command after execution
-            
-            switch (cmd.action) {
-                case 'take picture':
-                    await handleTakePicture(cmd.count, cmd.delay);
-                    break;
-                case 'record video':
-                    handleStartRecording('video', cmd.durationInSeconds);
-                    break;
-                case 'record sound':
-                    handleStartRecording('audio', cmd.durationInSeconds);
-                    break;
-                case 'stop recording':
-                    handleStopRecording();
-                    break;
+    if (!command) return;
+    if (command.type !== 'record-audio' && command.type !== 'stop-audio-recording' && !isStreamReady) return;
+
+    switch(command.type) {
+        case 'take-photos':
+            if (command.count === 1) {
+                handleTakePhoto();
+                onCommandComplete();
+            } else {
+                setPhotosToTake(command.count);
             }
+            break;
+        case 'take-photo-timer':
+            handleSinglePhotoTimer(command.duration);
+            break;
+        case 'record-video':
+            handleStartRecording(command.duration);
             onCommandComplete();
-        }
-    };
-    executeCommand();
-  }, [isCameraReady, command, onCommandComplete, handleStartRecording, handleStopRecording, handleTakePicture]);
-
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-    const secs = (seconds % 60).toString().padStart(2, '0');
-    return `${mins}:${secs}`;
-  }
+            break;
+        case 'record-audio':
+            handleStartAudioRecording();
+            onCommandComplete();
+            break;
+        case 'stop-audio-recording':
+            handleStopAudioRecording();
+            onCommandComplete();
+            break;
+        case 'stop-recording':
+            handleStopRecording();
+            onCommandComplete();
+            break;
+        case 'switch-camera':
+            handleSwitchCamera();
+            onCommandComplete();
+            break;
+    }
+  }, [command, isStreamReady, handleTakePhoto, handleStartRecording, handleStopRecording, handleSwitchCamera, onCommandComplete, handleSinglePhotoTimer, handleStartAudioRecording, handleStopAudioRecording]);
 
   return (
-    <div className={`fixed inset-0 z-40 ${show ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-        {/* Left Panel: Media List */}
-        <div className={`fixed top-0 left-20 w-[25vw] h-full bg-slate-800 text-white p-4 transition-transform duration-300 ease-in-out
-            ${show ? 'translate-x-0' : '-translate-x-[calc(100%+80px)]'}
-        `}>
-            <h3 className="text-xl font-bold mb-4">Captured Photos</h3>
-            <div className="h-1/2 overflow-y-auto pr-2 space-y-2">
-                {photos.length === 0 ? <p className="text-slate-400">No photos yet.</p> :
-                 photos.map((p, i) => (
-                    <div key={i} className="relative group aspect-video bg-black rounded overflow-hidden">
-                        <img src={p.url} alt={p.name} className="w-full h-full object-cover"/>
-                        <a href={p.url} download={p.name} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-2xl transition-opacity">
-                            <i className="fas fa-save"></i>
-                        </a>
-                    </div>
-                ))}
-            </div>
-            <hr className="my-4 border-slate-600"/>
-            <h3 className="text-xl font-bold mb-4">Recordings</h3>
-            <div className="h-1/2 overflow-y-auto pr-2 space-y-2">
-                 {recordings.length === 0 ? <p className="text-slate-400">No recordings yet.</p> :
-                  recordings.map((r, i) => (
-                    <div key={i} className="flex items-center gap-3 bg-slate-700 p-2 rounded">
-                        <i className={`fas ${r.type === 'video' ? 'fa-video' : 'fa-microphone'} text-teal-400`}></i>
-                        <span className="text-sm truncate flex-grow">{r.name}</span>
-                        <a href={r.url} download={r.name} className="text-white hover:text-teal-400"><i className="fas fa-download"></i></a>
-                    </div>
-                  ))}
-            </div>
-        </div>
-
-        {/* Right Panel: Camera View */}
-        <div className={`fixed top-0 left-[calc(80px+25vw)] w-[calc(100vw-80px-25vw)] h-full bg-black p-4 transition-transform duration-300 ease-in-out
-            ${show ? 'translate-x-0' : 'translate-x-[calc(100%+80px)]'}
-        `}>
-            <div className="relative w-full h-full flex flex-col items-center justify-center">
+    <div className={`fixed inset-0 z-40 transition-opacity duration-300 ${show ? 'pointer-events-auto bg-black/50' : 'pointer-events-none opacity-0'}`}>
+      <div className={`fixed top-0 left-20 w-[calc(100vw-80px)] h-full bg-slate-900 text-white p-6 transition-transform duration-300 ease-in-out ${show ? 'translate-x-0' : 'translate-x-full'}`}>
+        <header className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">MEDIA CAPTURE</h2>
+            <button onClick={onClose} title="Close" className="hover:text-red-500 text-2xl"><i className="fas fa-times"></i></button>
+        </header>
+        <div className="flex h-[calc(100%-60px)] gap-6">
+            <div className="flex-[2] bg-black rounded-lg overflow-hidden relative flex items-center justify-center">
+                <div className="absolute top-2 left-2 bg-black/50 p-2 rounded-md text-xs z-10">
+                    <h4 className="font-bold mb-1">Available Cameras:</h4>
+                    <ul>
+                        {availableCameras.map((cam, index) => (
+                            <li key={cam.deviceId} className={index === currentCameraIndex ? 'text-teal-400 font-bold' : ''}>
+                                {cam.label || `Camera ${index + 1}`}
+                            </li>
+                        ))}
+                         {availableCameras.length === 0 && <li>No cameras found.</li>}
+                    </ul>
+                </div>
+                
                 <video 
                     ref={videoRef} 
                     autoPlay 
-                    muted 
                     playsInline 
-                    className="w-full h-full object-contain"
-                    onLoadedMetadata={() => setIsCameraReady(true)}
+                    muted 
+                    className="w-full h-full object-cover"
+                    onCanPlay={() => setIsStreamReady(true)}
                 ></video>
 
-                {countdown && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                        <span className="text-9xl font-bold text-white drop-shadow-lg">{countdown}</span>
+                {(countdown !== null || (recordingTimer !== null && isRecording)) && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 pointer-events-none">
+                        <span className="text-9xl font-bold text-white" style={{ textShadow: '0 0 15px rgba(0,0,0,0.7)' }}>
+                            {countdown !== null ? countdown : recordingTimer}
+                        </span>
                     </div>
                 )}
                 
-                {isRecording && (
-                    <div className="absolute top-4 left-4 flex items-center gap-2 bg-red-600 text-white px-3 py-1 rounded-full text-sm font-bold animate-pulse">
-                        <i className="fas fa-circle"></i>
-                        <span>{formatTime(elapsedTime)}</span>
-                    </div>
-                )}
+                {!isStreamReady && show && <div className="absolute text-white/50 animate-pulse">Initializing Camera...</div>}
 
-                {/* On-screen controls */}
-                <div className="absolute bottom-6 flex items-center gap-8">
-                    <button 
-                        onClick={() => handleTakePicture()}
-                        disabled={isRecording}
-                        className="w-20 h-20 bg-white rounded-full flex items-center justify-center disabled:opacity-50"
-                    >
-                       <i className="fas fa-camera text-3xl text-gray-800"></i>
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-slate-800/70 flex justify-center items-center gap-6 backdrop-blur-sm">
+                    <button onClick={handleSwitchCamera} disabled={isRecording || isAudioRecording || photosToTake > 0 || availableCameras.length <= 1} className="w-16 h-16 rounded-full bg-slate-600 disabled:bg-slate-700 disabled:opacity-50 flex items-center justify-center" title="Switch Camera">
+                        <i className="fas fa-sync-alt text-white text-2xl"></i>
                     </button>
-                    <button 
-                        onClick={isRecording ? handleStopRecording : () => handleStartRecording('video')}
-                        className="w-16 h-16 bg-red-600 rounded-full flex items-center justify-center"
-                    >
-                       {isRecording ? <div className="w-6 h-6 bg-white rounded"></div> : <i className="fas fa-video text-2xl text-white"></i>}
+                    <button onClick={handleTakePhoto} disabled={isRecording || isAudioRecording || photosToTake > 0 || !isStreamReady} className="w-16 h-16 rounded-full bg-white disabled:bg-gray-400 flex items-center justify-center" title="Take Photo">
+                        <i className="fas fa-camera text-slate-800 text-2xl"></i>
+                    </button>
+                     <button onClick={isAudioRecording ? handleStopAudioRecording : handleStartAudioRecording} disabled={isRecording || photosToTake > 0} className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center disabled:opacity-50" title={isAudioRecording ? 'Stop Audio Recording' : 'Record Audio'}>
+                        <div className={`w-10 h-10 transition-all flex items-center justify-center ${isAudioRecording ? 'bg-red-600 animate-pulse' : 'bg-blue-500'} rounded-full`}>
+                            <i className="fas fa-microphone text-white text-2xl"></i>
+                        </div>
+                    </button>
+                    <button onClick={isRecording ? handleStopRecording : () => handleStartRecording()} disabled={!isStreamReady || isAudioRecording || photosToTake > 0} className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center disabled:opacity-50" title={isRecording ? 'Stop Recording' : 'Record Video'}>
+                        <div className={`w-10 h-10 transition-all ${isRecording ? 'bg-red-600 rounded-sm' : 'bg-red-500 rounded-full'}`}></div>
                     </button>
                 </div>
-                 <button onClick={onClose} className="absolute top-4 right-4 text-white text-2xl p-2 bg-black/50 rounded-full hover:bg-red-600 transition-colors">
-                    <i className="fas fa-times"></i>
-                </button>
+            </div>
+            <div className="flex-1 bg-slate-800 rounded-lg p-4 overflow-y-auto">
+                <h3 className="text-lg font-bold mb-4">Captured Media</h3>
+                <div className="grid grid-cols-2 gap-4">
+                    {mediaItems.slice().reverse().map(item => (
+                        <div key={item.id} className="relative aspect-square bg-black rounded-md overflow-hidden group">
+                            {item.type === 'photo' && <img src={item.src} alt="captured content" className="w-full h-full object-cover" />}
+                            {item.type === 'video' && <video src={item.src} className="w-full h-full object-cover" controls />}
+                            {item.type === 'audio' && <div className="w-full h-full flex items-center justify-center p-2"><audio src={item.src} className="w-full" controls /></div>}
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <a href={item.src} download={`media-${item.id}.${item.type === 'photo' ? 'jpg' : 'webm'}`} className="text-white hover:text-teal-400" title="Download">
+                                    <i className="fas fa-download text-2xl"></i>
+                                </a>
+                            </div>
+                        </div>
+                    ))}
+                    {mediaItems.length === 0 && <p className="text-slate-400 col-span-2">No media captured yet.</p>}
+                </div>
             </div>
         </div>
+      </div>
     </div>
   );
 };
