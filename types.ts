@@ -1,42 +1,52 @@
-
 export enum UIMode {
-  MAIN = 'MAIN',
-  CONTACTS = 'CONTACTS',
-  MEDIA = 'MEDIA',
+  MAIN,
+  CONTACTS,
+  MEDIA,
+  CALENDAR,
 }
 
 export enum CaptureMode {
-  GENERAL = 'GENERAL',
-  CONTACT = 'CONTACT',
-  CONFIRMATION = 'CONFIRMATION',
+  GENERAL,
+  CONTACT,
+  CONFIRMATION,
 }
 
 export interface Contact {
+  id: string;
   name: string;
-  status: 'online' | 'offline';
   phone?: string;
   email?: string;
   details?: string;
+  status: 'online' | 'offline';
+  phoneUrl?: string;
+  emailUrl?: string;
 }
 
-export type Confirmation = {
-  type?: string;
-  name?: string;
-  number?: string;
-};
-
-// FIX: Add 'photo' to RecordingType to properly categorize captured images.
-export type RecordingType = 'video' | 'audio' | 'photo';
-
-export interface Recording {
-  url: string;
-  type: RecordingType;
+export interface Confirmation {
+  id:string;
+  type: string;
   name: string;
+  number: string;
 }
 
-export type MediaCommand = {
-  action: string;
-  durationInSeconds?: number;
-  count?: number;
-  delay?: number;
-};
+export interface MediaItem {
+    id: string;
+    type: 'photo' | 'video' | 'audio';
+    src: string;
+    timestamp: Date;
+}
+
+export interface Reminder {
+    id: string;
+    text: string;
+    timestamp: Date;
+}
+
+export type MediaCommand = 
+ | { type: 'take-photos', count: number, timer?: number }
+ | { type: 'take-photo-timer', duration: number }
+ | { type: 'record-video', duration?: number }
+ | { type: 'stop-recording' }
+ | { type: 'record-audio' }
+ | { type: 'stop-audio-recording' }
+ | { type: 'switch-camera' };
