@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { UIMode } from '../types';
 
@@ -46,6 +45,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ isListening, onToggleListen, onSetUiM
             <>
                 <ToolbarButton title="Contacts" icon="fa-address-book" onClick={() => onSetUiMode(UIMode.CONTACTS)} />
                 <ToolbarButton title="Media" icon="fa-camera" onClick={() => onSetUiMode(UIMode.MEDIA)} />
+                <ToolbarButton title="Calendar" icon="fa-calendar-alt" onClick={() => onSetUiMode(UIMode.CALENDAR)} />
             </>
         ) : (
             <button onClick={() => onSetUiMode(UIMode.MAIN)} className="w-11/12 p-2 mt-5 text-xs bg-red-700 text-white rounded-md hover:bg-red-800 transition-colors flex flex-col items-center" title="Close Panels">
