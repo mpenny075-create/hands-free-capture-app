@@ -266,7 +266,7 @@ const App: React.FC = () => {
     };
 
     return (
-        <div className="bg-slate-900 min-h-screen text-white font-sans">
+        <div className="bg-slate-900 h-screen text-white font-sans flex flex-col md:flex-row overflow-hidden">
             <Toolbar
                 isListening={isListening}
                 onToggleListen={handleToggleListen}
@@ -274,60 +274,62 @@ const App: React.FC = () => {
                 currentUiMode={uiMode}
                 isRecording={isRecording}
             />
-            <main className="ml-20 p-8">
-                <h1 className="text-4xl font-bold mb-2">AI Voice Assistant</h1>
-                <p className="text-slate-400">Say <code className="bg-slate-700 text-teal-300 px-1.5 py-0.5 rounded">'commands list'</code> to see available voice commands.</p>
-                
-                <div className="mt-8 p-4 bg-slate-800/50 rounded-lg min-h-[6rem] flex items-center justify-center flex-col shadow-inner">
-                    {isListening ? (
-                        <>
-                            <div className="text-2xl text-red-500 animate-pulse">Listening...</div>
-                            {transcript && (
-                                <p className="text-slate-400 mt-2 text-center">
-                                    Last command: <span className="text-white font-mono bg-slate-700 px-2 py-1 rounded">{transcript}</span>
-                                </p>
-                            )}
-                        </>
-                    ) : (
-                         <div className="text-center text-xl text-slate-500">
-                            {uiMode === UIMode.MAIN ? "Press 'Start' to begin." : "Voice recognition is off. Press 'Start' to enable."}
-                        </div>
-                    )}
-                </div>
-            </main>
-            <ContactsView
-                show={uiMode === UIMode.CONTACTS}
-                onClose={() => setUiMode(UIMode.MAIN)}
-                captureMode={captureMode}
-                setCaptureMode={setCaptureMode}
-                contacts={contacts}
-                onImportContacts={handleImportContacts}
-                newContactData={newContact}
-                onSave={handleSaveContact}
-                onCancel={handleCancelContact}
-                newConfirmationData={newConfirmation}
-                onSaveConfirmation={handleSaveConfirmation}
-                onCancelConfirmation={handleCancelConfirmation}
-                activeContactQuery={activeContactQuery}
-                onQueryHandled={() => setActiveContactQuery(null)}
-            />
-            <MediaView
-                show={uiMode === UIMode.MEDIA}
-                onClose={() => {
-                    setUiMode(UIMode.MAIN);
-                    setMediaCommand(null);
-                }}
-                onCaptureMedia={handleCaptureMedia}
-                onRecordingStateChange={setIsRecording}
-                command={mediaCommand}
-                onCommandComplete={() => setMediaCommand(null)}
-                mediaItems={mediaItems}
-            />
-            <CalendarView
-                show={uiMode === UIMode.CALENDAR}
-                onClose={() => setUiMode(UIMode.MAIN)}
-                reminders={reminders}
-            />
+            <div className="relative flex-grow h-full">
+                 <main className="p-6 md:p-8 h-full pb-24 md:pb-8 overflow-y-auto">
+                    <h1 className="text-4xl font-bold mb-2">AI Voice Assistant</h1>
+                    <p className="text-slate-400">Say <code className="bg-slate-700 text-teal-300 px-1.5 py-0.5 rounded">'commands list'</code> to see available voice commands.</p>
+                    
+                    <div className="mt-8 p-4 bg-slate-800/50 rounded-lg min-h-[6rem] flex items-center justify-center flex-col shadow-inner">
+                        {isListening ? (
+                            <>
+                                <div className="text-2xl text-red-500 animate-pulse">Listening...</div>
+                                {transcript && (
+                                    <p className="text-slate-400 mt-2 text-center">
+                                        Last command: <span className="text-white font-mono bg-slate-700 px-2 py-1 rounded">{transcript}</span>
+                                    </p>
+                                )}
+                            </>
+                        ) : (
+                             <div className="text-center text-xl text-slate-500">
+                                {uiMode === UIMode.MAIN ? "Press 'Start' to begin." : "Voice recognition is off. Press 'Start' to enable."}
+                            </div>
+                        )}
+                    </div>
+                </main>
+                <ContactsView
+                    show={uiMode === UIMode.CONTACTS}
+                    onClose={() => setUiMode(UIMode.MAIN)}
+                    captureMode={captureMode}
+                    setCaptureMode={setCaptureMode}
+                    contacts={contacts}
+                    onImportContacts={handleImportContacts}
+                    newContactData={newContact}
+                    onSave={handleSaveContact}
+                    onCancel={handleCancelContact}
+                    newConfirmationData={newConfirmation}
+                    onSaveConfirmation={handleSaveConfirmation}
+                    onCancelConfirmation={handleCancelConfirmation}
+                    activeContactQuery={activeContactQuery}
+                    onQueryHandled={() => setActiveContactQuery(null)}
+                />
+                <MediaView
+                    show={uiMode === UIMode.MEDIA}
+                    onClose={() => {
+                        setUiMode(UIMode.MAIN);
+                        setMediaCommand(null);
+                    }}
+                    onCaptureMedia={handleCaptureMedia}
+                    onRecordingStateChange={setIsRecording}
+                    command={mediaCommand}
+                    onCommandComplete={() => setMediaCommand(null)}
+                    mediaItems={mediaItems}
+                />
+                <CalendarView
+                    show={uiMode === UIMode.CALENDAR}
+                    onClose={() => setUiMode(UIMode.MAIN)}
+                    reminders={reminders}
+                />
+            </div>
             <CommandsList
                 show={showCommands}
                 onClose={() => setShowCommands(false)}
