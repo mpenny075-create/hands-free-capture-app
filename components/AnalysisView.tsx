@@ -10,12 +10,13 @@ interface AnalysisViewProps {
 
 const AnalysisView: React.FC<AnalysisViewProps> = ({ show, onClose, transcriptions }) => {
   return (
-    <div className={`fixed inset-0 z-40 bg-slate-900 transition-transform duration-300 ease-in-out ${show ? 'translate-y-0' : 'translate-y-full'}`}>
-        <header className="flex justify-between items-center p-4">
+    <div className={`fixed inset-0 z-40 transition-opacity duration-300 ${show ? 'pointer-events-auto bg-black/50' : 'pointer-events-none opacity-0'}`}>
+      <div className={`fixed top-0 md:left-20 w-full md:w-[calc(100vw-80px)] h-full bg-slate-900 text-white p-6 pb-24 md:pb-6 transition-transform duration-300 ease-in-out ${show ? 'translate-x-0' : 'translate-x-full'}`}>
+        <header className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold">TRANSCRIPTION LOG</h2>
             <button onClick={onClose} title="Close" className="hover:text-red-500 text-2xl"><i className="fas fa-times"></i></button>
         </header>
-        <div className="bg-slate-800/80 rounded-lg overflow-y-auto h-[calc(100%-70px)] m-4 mt-0 p-4 space-y-4">
+        <div className="bg-slate-800/80 rounded-lg overflow-y-auto h-[calc(100%-70px)] p-4 space-y-4">
             {transcriptions.map(item => (
                 <div key={item.id} className={`flex items-start gap-4 ${item.type === 'user' ? 'justify-end' : 'justify-start'}`}>
                     {item.type !== 'user' && (
@@ -36,6 +37,7 @@ const AnalysisView: React.FC<AnalysisViewProps> = ({ show, onClose, transcriptio
             ))}
             {transcriptions.length === 0 && <p className="text-slate-500 text-center mt-4">No transcriptions yet. Start speaking to see the log.</p>}
         </div>
+      </div>
     </div>
   );
 };
