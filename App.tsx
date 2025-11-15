@@ -50,10 +50,7 @@ function App() {
         const saved = localStorage.getItem('contacts');
         return saved ? JSON.parse(saved) : [];
     });
-    const [reminders, setReminders] = useState<Reminder[]>(() => {
-        const saved = localStorage.getItem('reminders');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [reminders, setReminders] = useState<Reminder[]>([]);
     const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
     const [confirmations, setConfirmations] = useState<Confirmation[]>(() => {
         const saved = localStorage.getItem('confirmations');
@@ -80,10 +77,6 @@ function App() {
     useEffect(() => {
         localStorage.setItem('confirmations', JSON.stringify(confirmations));
     }, [confirmations]);
-    
-    useEffect(() => {
-        localStorage.setItem('reminders', JSON.stringify(reminders));
-    }, [reminders]);
 
 
     const addTranscription = useCallback((text: string, type: 'user' | 'system' | 'model') => {
@@ -172,9 +165,9 @@ function App() {
             description: 'Controls the media capture view for taking photos or recording videos and audio.',
             parameters: {
                 type: Type.OBJECT, properties: {
-                    action: { type: Type.STRING, description: 'The action to perform: "take-photo", "take-photos", "take-photo-timer", "record-video", "record-audio", "stop-recording", "stop-audio-recording", "switch-camera".' },
-                    count: { type: Type.NUMBER, description: 'The number of photos to take for the "take-photos" action.' },
-                    duration: { type: Type.NUMBER, description: 'Duration in seconds for a timer ("take-photo-timer", "take-photos") or recording ("record-video").' }
+                    action: { type: Type.STRING, description: 'The action to perform: "take-photo", "take-photos", "record-video", "record-audio", "stop-recording", "stop-audio-recording", "switch-camera".' },
+                    count: { type: Type.NUMBER, description: 'The number of photos to take.' },
+                    duration: { type: Type.NUMBER, description: 'Duration in seconds for a timer or recording.' }
                 }, required: ['action']
             }
         },
@@ -245,26 +238,14 @@ function App() {
             case 'mediaAction':
                 setActiveView(View.MEDIA);
                 const action = args.action as string;
-                const durationInSeconds = args.duration ? Number(args.duration) : undefined;
-                
-                if (action === 'take-photo') {
-                    setMediaCommand({ type: 'take-photos', count: 1 });
-                } else if (action === 'take-photo-timer') {
-                    setMediaCommand({ type: 'take-photo-timer', duration: durationInSeconds || 5 });
-                } else if (action === 'take-photos') {
-                    setMediaCommand({ type: 'take-photos', count: Number(args.count) || 1, timer: durationInSeconds });
-                } else if (action === 'record-video') {
-                    const durationInMs = durationInSeconds ? durationInSeconds * 1000 : undefined;
-                    setMediaCommand({ type: 'record-video', duration: durationInMs });
-                } else if (action === 'record-audio') {
-                    setMediaCommand({ type: 'record-audio' });
-                } else if (action === 'stop-recording') {
-                    setMediaCommand({ type: 'stop-recording' });
-                } else if (action === 'stop-audio-recording') {
-                    setMediaCommand({ type: 'stop-audio-recording' });
-                } else if (action === 'switch-camera') {
-                    setMediaCommand({ type: 'switch-camera' });
-                }
+                const duration = args.duration ? Number(args.duration) * 1000 : undefined;
+                if (action === 'take-photo') setMediaCommand({ type: 'take-photos', count: 1 });
+                if (action === 'take-photos') setMediaCommand({ type: 'take-photos', count: Number(args.count) || 1, timer: duration ? Number(args.duration) : undefined });
+                if (action === 'record-video') setMediaCommand({ type: 'record-video', duration });
+                if (action === 'record-audio') setMediaCommand({ type: 'record-audio' });
+                if (action === 'stop-recording') setMediaCommand({ type: 'stop-recording' });
+                if (action === 'stop-audio-recording') setMediaCommand({ type: 'stop-audio-recording' });
+                if (action === 'switch-camera') setMediaCommand({ type: 'switch-camera' });
                 break;
             case 'addReminder':
                 if (args.text) {
@@ -488,7 +469,7 @@ function App() {
     }
 
     return (
-        <div className="bg-slate-900 min-h-screen font-sans text-white">
+        <div className="bg-slate-900 min-h-screen font-sans">
             <Toolbar
                 activeView={activeView}
                 setActiveView={setActiveView}
@@ -497,25 +478,11 @@ function App() {
                 startListening={startListening}
                 stopListening={stopListening}
             />
-            <main className="relative md:ml-20 h-screen overflow-y-auto pb-20 md:pb-0">
-                {activeView === View.NONE && (
-                    <div className="p-4 md:p-8">
-                        <h1 className="text-3xl font-light mb-2">AI Voice Assistant</h1>
-                        <p className="text-slate-400">Use your voice to control the interface. Say "show commands" to get started.</p>
-                         <div className="mt-8 p-6 bg-slate-800/50 rounded-lg">
-                             <h2 className="text-xl font-bold text-teal-400 mb-4">Listening Status</h2>
-                             <div className="flex items-center gap-4">
-                                 <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl ${isListening ? 'bg-red-500 animate-pulse' : 'bg-slate-700'}`}>
-                                     <i className="fas fa-microphone"></i>
-                                 </div>
-                                 <div>
-                                    <p className={`text-2xl font-semibold ${isListening ? 'text-red-400' : 'text-slate-400'}`}>{isListening ? 'Listening...' : 'Not Listening'}</p>
-                                    <p className="text-slate-500">Last command: <code className="bg-slate-700 rounded px-2 py-1">{transcript || '...'}</code></p>
-                                 </div>
-                             </div>
-                         </div>
-                    </div>
-                )}
+            <main className="ml-0 md:ml-20 text-white">
+                <div className="p-4 md:p-8">
+                    <h1 className="text-3xl font-light mb-2">AI Voice Assistant</h1>
+                    <p className="text-slate-400">Use your voice to control the interface. Click the mic or say "Hey Gemini" to start.</p>
+                </div>
 
                 <ContactsView
                     show={activeView === View.CONTACTS}
@@ -535,7 +502,7 @@ function App() {
                 />
                 <MediaView
                     show={activeView === View.MEDIA}
-                    onClose={() => { setActiveView(View.NONE); setMediaCommand(null); }}
+                    onClose={() => setActiveView(View.NONE)}
                     onCaptureMedia={handleCaptureMedia}
                     onRecordingStateChange={setIsRecordingMedia}
                     command={mediaCommand}
