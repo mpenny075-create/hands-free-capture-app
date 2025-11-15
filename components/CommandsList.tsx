@@ -16,12 +16,13 @@ const CommandCategory: React.FC<{ title: string; children: React.ReactNode }> = 
 
 const CommandsList: React.FC<CommandsListProps> = ({ show, onClose }) => {
   return (
-    <div className={`fixed inset-0 z-40 bg-slate-900 transition-transform duration-300 ease-in-out ${show ? 'translate-y-0' : 'translate-y-full'}`}>
-        <header className="flex justify-between items-center p-4">
+    <div className={`fixed inset-0 z-40 transition-opacity duration-300 ${show ? 'pointer-events-auto bg-black/50' : 'pointer-events-none opacity-0'}`}>
+      <div className={`fixed top-0 md:left-20 w-full md:w-[calc(100vw-80px)] h-full bg-slate-900 text-white p-6 pb-24 md:pb-6 transition-transform duration-300 ease-in-out ${show ? 'translate-x-0' : 'translate-x-full'}`}>
+        <header className="flex justify-between items-center mb-6">
             <h2 className="text-2xl font-bold">VOICE COMMANDS</h2>
             <button onClick={onClose} title="Close" className="hover:text-red-500 text-2xl"><i className="fas fa-times"></i></button>
         </header>
-        <div className="overflow-y-auto h-[calc(100%-70px)] p-4 pt-0">
+        <div className="overflow-y-auto h-[calc(100%-70px)] pr-4">
             <p className="text-slate-400 mb-6">You can activate listening by clicking the microphone icon.</p>
             
             <CommandCategory title="General">
@@ -63,6 +64,7 @@ const CommandsList: React.FC<CommandsListProps> = ({ show, onClose }) => {
             </CommandCategory>
 
         </div>
+      </div>
     </div>
   );
 };
