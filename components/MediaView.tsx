@@ -56,13 +56,9 @@ const MediaView: React.FC<MediaViewProps> = ({
 
     let cameras = availableCameras;
     if (cameras.length === 0) {
-        try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            cameras = devices.filter(device => device.kind === 'videoinput');
-            setAvailableCameras(cameras);
-        } catch(e){
-            console.error("Could not enumerate devices:", e);
-        }
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        cameras = devices.filter(device => device.kind === 'videoinput');
+        setAvailableCameras(cameras);
     }
 
     if (cameras.length > 0) {
@@ -283,82 +279,82 @@ const MediaView: React.FC<MediaViewProps> = ({
   }, [command, isStreamReady, handleTakePhoto, handleStartRecording, handleStopRecording, handleSwitchCamera, onCommandComplete, handleSinglePhotoTimer, handleStartAudioRecording, handleStopAudioRecording]);
 
   return (
-    <div className={`fixed inset-0 z-40 bg-slate-900 transition-transform duration-300 ease-in-out ${show ? 'translate-y-0' : 'translate-y-full'}`}>
-        <div className="flex flex-col h-full">
-            <header className="flex justify-between items-center p-4 flex-shrink-0">
-                <h2 className="text-xl font-bold">MEDIA CAPTURE</h2>
-                <button onClick={onClose} title="Close" className="hover:text-red-500 text-2xl"><i className="fas fa-times"></i></button>
-            </header>
-            <div className="flex-grow flex flex-col md:flex-row h-full overflow-hidden p-4 pt-0 gap-4">
-                <div className="flex-1 md:flex-[2] bg-black rounded-lg overflow-hidden relative flex items-center justify-center h-1/2 md:h-full">
-                    <div className="absolute top-2 left-2 bg-black/50 p-2 rounded-md text-xs z-10">
-                        <h4 className="font-bold mb-1">Available Cameras:</h4>
-                        <ul>
-                            {availableCameras.map((cam, index) => (
-                                <li key={cam.deviceId} className={index === currentCameraIndex ? 'text-teal-400 font-bold' : ''}>
-                                    {cam.label || `Camera ${index + 1}`}
-                                </li>
-                            ))}
-                            {availableCameras.length === 0 && <li>No cameras found.</li>}
-                        </ul>
-                    </div>
-                    
-                    <video 
-                        ref={videoRef} 
-                        autoPlay 
-                        playsInline 
-                        muted 
-                        className="w-full h-full object-cover"
-                        onCanPlay={() => setIsStreamReady(true)}
-                    ></video>
-
-                    {(countdown !== null || (recordingTimer !== null && isRecording)) && (
-                        <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 pointer-events-none">
-                            <span className="text-9xl font-bold text-white" style={{ textShadow: '0 0 15px rgba(0,0,0,0.7)' }}>
-                                {countdown !== null ? countdown : recordingTimer}
-                            </span>
-                        </div>
-                    )}
-                    
-                    {!isStreamReady && show && <div className="absolute text-white/50 animate-pulse">Initializing Camera...</div>}
-
-                    <div className="absolute bottom-0 left-0 right-0 p-4 bg-slate-800/70 flex justify-center items-center gap-6 backdrop-blur-sm">
-                        <button onClick={handleSwitchCamera} disabled={isRecording || isAudioRecording || photosToTake > 0 || availableCameras.length <= 1} className="w-16 h-16 rounded-full bg-slate-600 disabled:bg-slate-700 disabled:opacity-50 flex items-center justify-center" title="Switch Camera">
-                            <i className="fas fa-sync-alt text-white text-2xl"></i>
-                        </button>
-                        <button onClick={handleTakePhoto} disabled={isRecording || isAudioRecording || photosToTake > 0 || !isStreamReady} className="w-16 h-16 rounded-full bg-white disabled:bg-gray-400 flex items-center justify-center" title="Take Photo">
-                            <i className="fas fa-camera text-slate-800 text-2xl"></i>
-                        </button>
-                        <button onClick={isAudioRecording ? handleStopAudioRecording : handleStartAudioRecording} disabled={isRecording || photosToTake > 0} className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center disabled:opacity-50" title={isAudioRecording ? 'Stop Audio Recording' : 'Record Audio'}>
-                            <div className={`w-10 h-10 transition-all flex items-center justify-center ${isAudioRecording ? 'bg-red-600 animate-pulse' : 'bg-blue-500'} rounded-full`}>
-                                <i className="fas fa-microphone text-white text-2xl"></i>
-                            </div>
-                        </button>
-                        <button onClick={isRecording ? handleStopRecording : () => handleStartRecording()} disabled={!isStreamReady || isAudioRecording || photosToTake > 0} className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center disabled:opacity-50" title={isRecording ? 'Stop Recording' : 'Record Video'}>
-                            <div className={`w-10 h-10 transition-all ${isRecording ? 'bg-red-600 rounded-sm' : 'bg-red-500 rounded-full'}`}></div>
-                        </button>
-                    </div>
-                </div>
-                <div className="flex-1 bg-slate-800 rounded-lg p-4 overflow-y-auto h-1/2 md:h-full">
-                    <h3 className="text-lg font-bold mb-4">Captured Media</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        {mediaItems.slice().reverse().map(item => (
-                            <div key={item.id} className="relative aspect-square bg-black rounded-md overflow-hidden group">
-                                {item.type === 'photo' && <img src={item.src} alt="captured content" className="w-full h-full object-cover" />}
-                                {item.type === 'video' && <video src={item.src} className="w-full h-full object-cover" controls />}
-                                {item.type === 'audio' && <div className="w-full h-full flex items-center justify-center p-2"><audio src={item.src} className="w-full" controls /></div>}
-                                <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                    <a href={item.src} download={`media-${item.id}.${item.type === 'photo' ? 'jpg' : 'webm'}`} className="text-white hover:text-teal-400" title="Download">
-                                        <i className="fas fa-download text-2xl"></i>
-                                    </a>
-                                </div>
-                            </div>
+    <div className={`fixed inset-0 z-40 transition-opacity duration-300 ${show ? 'pointer-events-auto bg-black/50' : 'pointer-events-none opacity-0'}`}>
+      <div className={`fixed top-0 md:left-20 w-full md:w-[calc(100vw-80px)] h-full bg-slate-900 text-white p-6 pb-24 md:pb-6 transition-transform duration-300 ease-in-out ${show ? 'translate-x-0' : 'translate-x-full'}`}>
+        <header className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold">MEDIA CAPTURE</h2>
+            <button onClick={onClose} title="Close" className="hover:text-red-500 text-2xl"><i className="fas fa-times"></i></button>
+        </header>
+        <div className="flex flex-col md:flex-row h-[calc(100%-60px)] gap-6">
+            <div className="flex-1 md:flex-[2] bg-black rounded-lg overflow-hidden relative flex items-center justify-center">
+                <div className="absolute top-2 left-2 bg-black/50 p-2 rounded-md text-xs z-10">
+                    <h4 className="font-bold mb-1">Available Cameras:</h4>
+                    <ul>
+                        {availableCameras.map((cam, index) => (
+                            <li key={cam.deviceId} className={index === currentCameraIndex ? 'text-teal-400 font-bold' : ''}>
+                                {cam.label || `Camera ${index + 1}`}
+                            </li>
                         ))}
-                        {mediaItems.length === 0 && <p className="text-slate-400 col-span-2">No media captured yet.</p>}
+                         {availableCameras.length === 0 && <li>No cameras found.</li>}
+                    </ul>
+                </div>
+                
+                <video 
+                    ref={videoRef} 
+                    autoPlay 
+                    playsInline 
+                    muted 
+                    className="w-full h-full object-cover"
+                    onCanPlay={() => setIsStreamReady(true)}
+                ></video>
+
+                {(countdown !== null || (recordingTimer !== null && isRecording)) && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 z-20 pointer-events-none">
+                        <span className="text-9xl font-bold text-white" style={{ textShadow: '0 0 15px rgba(0,0,0,0.7)' }}>
+                            {countdown !== null ? countdown : recordingTimer}
+                        </span>
                     </div>
+                )}
+                
+                {!isStreamReady && show && <div className="absolute text-white/50 animate-pulse">Initializing Camera...</div>}
+
+                <div className="absolute bottom-0 left-0 right-0 p-4 bg-slate-800/70 flex justify-center items-center gap-6 backdrop-blur-sm">
+                    <button onClick={handleSwitchCamera} disabled={isRecording || isAudioRecording || photosToTake > 0 || availableCameras.length <= 1} className="w-16 h-16 rounded-full bg-slate-600 disabled:bg-slate-700 disabled:opacity-50 flex items-center justify-center" title="Switch Camera">
+                        <i className="fas fa-sync-alt text-white text-2xl"></i>
+                    </button>
+                    <button onClick={handleTakePhoto} disabled={isRecording || isAudioRecording || photosToTake > 0 || !isStreamReady} className="w-16 h-16 rounded-full bg-white disabled:bg-gray-400 flex items-center justify-center" title="Take Photo">
+                        <i className="fas fa-camera text-slate-800 text-2xl"></i>
+                    </button>
+                     <button onClick={isAudioRecording ? handleStopAudioRecording : handleStartAudioRecording} disabled={isRecording || photosToTake > 0} className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center disabled:opacity-50" title={isAudioRecording ? 'Stop Audio Recording' : 'Record Audio'}>
+                        <div className={`w-10 h-10 transition-all flex items-center justify-center ${isAudioRecording ? 'bg-red-600 animate-pulse' : 'bg-blue-500'} rounded-full`}>
+                            <i className="fas fa-microphone text-white text-2xl"></i>
+                        </div>
+                    </button>
+                    <button onClick={isRecording ? handleStopRecording : () => handleStartRecording()} disabled={!isStreamReady || isAudioRecording || photosToTake > 0} className="w-16 h-16 rounded-full border-4 border-white flex items-center justify-center disabled:opacity-50" title={isRecording ? 'Stop Recording' : 'Record Video'}>
+                        <div className={`w-10 h-10 transition-all ${isRecording ? 'bg-red-600 rounded-sm' : 'bg-red-500 rounded-full'}`}></div>
+                    </button>
+                </div>
+            </div>
+            <div className="flex-1 bg-slate-800 rounded-lg p-4 overflow-y-auto">
+                <h3 className="text-lg font-bold mb-4">Captured Media</h3>
+                <div className="grid grid-cols-2 gap-4">
+                    {mediaItems.slice().reverse().map(item => (
+                        <div key={item.id} className="relative aspect-square bg-black rounded-md overflow-hidden group">
+                            {item.type === 'photo' && <img src={item.src} alt="captured content" className="w-full h-full object-cover" />}
+                            {item.type === 'video' && <video src={item.src} className="w-full h-full object-cover" controls />}
+                            {item.type === 'audio' && <div className="w-full h-full flex items-center justify-center p-2"><audio src={item.src} className="w-full" controls /></div>}
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                <a href={item.src} download={`media-${item.id}.${item.type === 'photo' ? 'jpg' : 'webm'}`} className="text-white hover:text-teal-400" title="Download">
+                                    <i className="fas fa-download text-2xl"></i>
+                                </a>
+                            </div>
+                        </div>
+                    ))}
+                    {mediaItems.length === 0 && <p className="text-slate-400 col-span-2">No media captured yet.</p>}
                 </div>
             </div>
         </div>
+      </div>
     </div>
   );
 };
