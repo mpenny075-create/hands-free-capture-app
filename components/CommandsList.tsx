@@ -5,87 +5,64 @@ interface CommandsListProps {
   onClose: () => void;
 }
 
-const CommandItem: React.FC<{ command: string; description: string }> = ({ command, description }) => (
-    <div className="mb-3">
-        <code className="bg-slate-700 text-teal-300 font-mono px-2 py-1 rounded-md text-sm">{command}</code>
-        <p className="text-slate-400 text-sm mt-1 ml-1">{description}</p>
+const CommandCategory: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
+    <div>
+        <h3 className="text-xl font-semibold text-teal-400 mb-3 mt-5 border-b border-slate-700 pb-2">{title}</h3>
+        <ul className="space-y-2 text-slate-300 list-disc list-inside">
+            {children}
+        </ul>
     </div>
-);
-
-const Section: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-    <section className="mb-6">
-        <h3 className="text-xl font-bold text-white border-b-2 border-slate-600 pb-2 mb-4">{title}</h3>
-        {children}
-    </section>
 );
 
 const CommandsList: React.FC<CommandsListProps> = ({ show, onClose }) => {
   return (
-    <div className={`fixed inset-0 z-50 transition-opacity duration-300 ${show ? 'bg-black/60 pointer-events-auto' : 'bg-black/0 pointer-events-none'}`}>
-      <div
-        className={`fixed top-0 left-0 w-full max-w-md h-full bg-slate-800 text-white shadow-2xl p-6 transition-transform duration-300 ease-in-out overflow-y-auto
-            ${show ? 'translate-x-0' : '-translate-x-full'}
-        `}
-      >
-        <header className="flex justify-between items-center mb-6 pb-4 border-b border-slate-700">
-          <h2 className="text-2xl font-bold">Voice Commands</h2>
-          <button onClick={onClose} title="Close" className="text-2xl hover:text-red-500 transition-colors">
-            <i className="fas fa-times"></i>
-          </button>
+    <div className={`fixed inset-0 z-40 bg-slate-900 transition-transform duration-300 ease-in-out ${show ? 'translate-y-0' : 'translate-y-full'}`}>
+        <header className="flex justify-between items-center p-4">
+            <h2 className="text-2xl font-bold">VOICE COMMANDS</h2>
+            <button onClick={onClose} title="Close" className="hover:text-red-500 text-2xl"><i className="fas fa-times"></i></button>
         </header>
+        <div className="overflow-y-auto h-[calc(100%-70px)] p-4 pt-0">
+            <p className="text-slate-400 mb-6">You can activate listening by clicking the microphone icon.</p>
+            
+            <CommandCategory title="General">
+                <li>"Show commands"</li>
+                <li>"Hide commands" / "Close this"</li>
+                <li>"Show transcription log"</li>
+                <li>"Clear transcription"</li>
+            </CommandCategory>
+            
+            <CommandCategory title="Contacts">
+                <li>"Open contacts" / "Show my contacts"</li>
+                <li>"Load my contacts" (Loads mock data)</li>
+                <li>"Find contact Jane Doe" / "Show me contact 2"</li>
+                <li>"Capture contact. Name is John Doe, phone is 555-1234, email is john@test.com"</li>
+                <li>"Save contact" / "Cancel"</li>
+                 <li>"Capture confirmation. It's a hotel confirmation for John Doe, number is H-123-XYZ"</li>
+                 <li>"Save confirmation" / "Cancel"</li>
+            </CommandCategory>
 
-        <Section title="Global Commands">
-            <CommandItem command="commands list" description="Shows this list of commands." />
-            <CommandItem command="close list" description="Hides this list of commands." />
-            <CommandItem command="show contacts" description="Opens the contact management view." />
-            <CommandItem command="open camera" description="Opens the camera and media recording view." />
-            <CommandItem command="show calendar" description="Opens the calendar and reminders view." />
-            <CommandItem command="return to main" description="Closes any open view and returns to the main screen." />
-        </Section>
-        
-        <Section title="Contacts View">
-            <CommandItem command="load my contacts" description="Loads a sample list of contacts." />
-            <CommandItem command="call [name / contact #]" description="Opens details for a contact. Ex: 'call Jane Doe' or 'call contact 2'" />
-            <CommandItem command="email [name / contact #]" description="Opens details for a contact. Ex: 'email John'" />
-            <CommandItem command="capture contact" description="Opens the panel to add a new contact." />
-            <CommandItem command="capture confirmation" description="Opens the panel to add a new confirmation." />
-            <div className="pl-4 border-l-2 border-slate-700 mt-4">
-                <h4 className="text-lg font-semibold text-slate-300 mb-3">While in Contact Capture mode:</h4>
-                <CommandItem command="name [full name]" description="Sets the contact's name. Ex: 'name Jane Doe'" />
-                <CommandItem command="phone [phone number]" description="Sets the phone number. Ex: 'phone 555 123 4567'" />
-                <CommandItem command="email [email address]" description="Sets the email. Ex: 'email jane@example.com'" />
-                <CommandItem command="details [notes]" description="Adds notes about the contact." />
-                <CommandItem command="save contact" description="Saves the new contact information." />
-                <CommandItem command="cancel contact" description="Cancels adding the new contact." />
-            </div>
-             <div className="pl-4 border-l-2 border-slate-700 mt-4">
-                <h4 className="text-lg font-semibold text-slate-300 mb-3">While in Confirmation Capture mode:</h4>
-                <CommandItem command="type [booking, order, etc.]" description="Sets the confirmation type." />
-                <CommandItem command="name [airline, hotel, etc.]" description="Sets the associated name for the confirmation." />
-                <CommandItem command="number [confirmation #]" description="Sets the confirmation number. Ex: 'number 123xyz'" />
-                <CommandItem command="save confirmation" description="Saves the new confirmation." />
-                <CommandItem command="cancel confirmation" description="Cancels adding the new confirmation." />
-            </div>
-        </Section>
-        
-        <Section title="Calendar & Reminders">
-             <CommandItem command="add reminder [text]" description="Adds a new reminder. Ex: 'add reminder call mom tomorrow'" />
-             <CommandItem command="remind me to [text]" description="Alternate way to add a reminder." />
-        </Section>
+            <CommandCategory title="Media">
+                <li>"Open media" / "Show media capture"</li>
+                <li>"Take a photo" / "Take picture"</li>
+                <li>"Take a photo in 5 seconds"</li>
+                <li>"Take 3 photos"</li>
+                <li>"Record a 10 second video"</li>
+                <li>"Start recording video" / "Stop recording"</li>
+                <li>"Start recording audio" / "Stop audio recording"</li>
+                <li>"Switch camera"</li>
+            </CommandCategory>
 
-        <Section title="Media View">
-            <CommandItem command="take a picture" description="Captures a single photo instantly." />
-            <CommandItem command="take a picture timer [X]" description="Captures one photo after an X-second countdown." />
-            <CommandItem command="take [X] pictures" description="Takes X photos with a 3-second countdown before each." />
-            <CommandItem command="take [X] pictures timer [Y]" description="Takes X photos with a Y-second countdown before each." />
-            <CommandItem command="record video for [X] seconds" description="Records video for a specific duration." />
-            <CommandItem command="stop recording" description="Stops any active video recording." />
-            <CommandItem command="record sound" description="Starts recording audio from the microphone." />
-            <CommandItem command="stop recording sound" description="Stops the active audio recording." />
-            <CommandItem command="switch camera" description="Cycles to the next available camera." />
-        </Section>
+             <CommandCategory title="Calendar & Reminders">
+                <li>"Open calendar" / "Show reminders"</li>
+                <li>"Add reminder to buy milk"</li>
+                <li>"Set a reminder: call Jane Doe"</li>
+            </CommandCategory>
 
-      </div>
+            <CommandCategory title="AI Assistant">
+                <li>"Open AI assistant"</li>
+            </CommandCategory>
+
+        </div>
     </div>
   );
 };
