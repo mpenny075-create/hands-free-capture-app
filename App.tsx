@@ -1,340 +1,573 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { GoogleGenAI, FunctionDeclaration, Type, FunctionCall } from '@google/genai';
+import { useSpeechRecognition } from './hooks/useSpeechRecognition';
+
+import { MOCK_CONTACTS } from './mockData';
+import { View, Contact, Confirmation, Reminder, MediaItem, Transcription, MediaCommand, CaptureMode, AnalysisResult } from './types';
+
 import Toolbar from './components/Toolbar';
 import ContactsView from './components/ContactsView';
 import MediaView from './components/MediaView';
 import CalendarView from './components/CalendarView';
+import AnalysisView from './components/AnalysisView';
 import CommandsList from './components/CommandsList';
-import { useSpeechRecognition } from './hooks/useSpeechRecognition';
-import { UIMode, CaptureMode, Contact, Confirmation, MediaItem, MediaCommand, Reminder } from './types';
-import { MOCK_CONTACTS } from './mockData';
+import AiAssistantView from './components/AiAssistantView';
+import ApiKeySetup from './components/ApiKeySetup';
 
-const wordToNumber = (word: string): number => {
-    const words: { [key: string]: number } = {
-        one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10
+const commandParsingModel = 'gemini-2.5-flash';
+
+function App() {
+    const [ai, setAi] = useState<GoogleGenAI | null>(null);
+    const [apiKey, setApiKey] = useState<string | null>(() => localStorage.getItem('gemini-api-key'));
+
+    // Initialize AI client when API key is available
+    useEffect(() => {
+        if (apiKey) {
+            try {
+                const genAi = new GoogleGenAI({ apiKey });
+                setAi(genAi);
+            } catch (e) {
+                console.error("Failed to initialize GoogleGenAI:", e);
+                // Handle invalid key case
+                localStorage.removeItem('gemini-api-key');
+                setApiKey(null);
+                alert("The saved API Key appears to be invalid. Please enter it again.");
+            }
+        }
+    }, [apiKey]);
+
+    const handleKeySubmit = (key: string) => {
+        localStorage.setItem('gemini-api-key', key);
+        setApiKey(key);
     };
-    const lowerWord = word.toLowerCase();
-    return words[lowerWord] || parseInt(word, 10);
-};
-
-const processCommand = async (command: string, captureMode: CaptureMode): Promise<any> => {
-    console.log("Processing command:", command);
-
-    const patterns = {
-        SET_NAME: /^name (.+)/i,
-        SET_PHONE: /^phone (.+)/i,
-        SET_EMAIL: /^email (.+)/i,
-        SET_DETAILS: /^details (.+)/i,
-        CONFIRM_TYPE: /^type (.+)/i,
-        CONFIRM_NUMBER: /^number (.+)/i,
-        TAKE_PHOTOS_TIMER: /^(?:take a picture|take a photo|take) (one|two|three|four|five|six|seven|eight|nine|ten|\d+) (?:pictures|photos) (?:with a )?timer (\d+)/i,
-        TAKE_PHOTOS: /^(?:take a picture|take a photo|take) (one|two|three|four|five|six|seven|eight|nine|ten|\d+) (?:pictures|photos)/i,
-        TAKE_PHOTO_TIMER: /^(?:take a picture|take a photo) (?:with a )?timer (\d+)/i,
-        RECORD_VIDEO_FOR: /^record video for (\d+) (seconds|minutes)/i,
-        ADD_REMINDER: /^(?:add reminder|remind me to) (.+)/i,
-        CALL_CONTACT: /^(?:call|dial) (.+)/i,
-        EMAIL_CONTACT: /^email (.+)/i,
-    };
-
-    if (patterns.SET_PHONE.test(command)) return { action: 'set_contact_phone', payload: command.match(patterns.SET_PHONE)?.[1] };
-    if (patterns.SET_EMAIL.test(command)) return { action: 'set_contact_email', payload: command.match(patterns.SET_EMAIL)?.[1] };
-    if (patterns.SET_DETAILS.test(command)) return { action: 'set_contact_details', payload: command.match(patterns.SET_DETAILS)?.[1] };
-    if (patterns.CONFIRM_TYPE.test(command)) return { action: 'set_confirmation_type', payload: command.match(patterns.CONFIRM_TYPE)?.[1] };
-    if (patterns.CONFIRM_NUMBER.test(command)) return { action: 'set_confirmation_number', payload: command.match(patterns.CONFIRM_NUMBER)?.[1] };
-    if (patterns.ADD_REMINDER.test(command)) return { action: 'add_reminder', payload: command.match(patterns.ADD_REMINDER)?.[1] };
-    if (patterns.CALL_CONTACT.test(command)) return { action: 'call_contact', payload: command.match(patterns.CALL_CONTACT)?.[1] };
-    
-    const emailMatch = command.match(patterns.EMAIL_CONTACT);
-    if (emailMatch && captureMode !== CaptureMode.CONTACT) {
-        return { action: 'email_contact', payload: emailMatch[1] };
-    }
-
-    const takePhotosTimerMatch = command.match(patterns.TAKE_PHOTOS_TIMER);
-    if (takePhotosTimerMatch) {
-        const count = wordToNumber(takePhotosTimerMatch[1]);
-        const timer = parseInt(takePhotosTimerMatch[2], 10);
-        return { action: 'take_photos', payload: { count, timer } };
-    }
-
-    const takePhotosMatch = command.match(patterns.TAKE_PHOTOS);
-    if (takePhotosMatch) {
-        const count = wordToNumber(takePhotosMatch[1]);
-        return { action: 'take_photos', payload: { count } };
-    }
-
-    const takePhotoTimerMatch = command.match(patterns.TAKE_PHOTO_TIMER);
-    if (takePhotoTimerMatch) {
-        return { action: 'take_photo_timer', payload: { duration: parseInt(takePhotoTimerMatch[1], 10) } };
-    }
-    
-    const recordVideoMatch = command.match(patterns.RECORD_VIDEO_FOR);
-    if (recordVideoMatch) {
-        const value = parseInt(recordVideoMatch[1], 10);
-        const unit = recordVideoMatch[2];
-        const duration = unit === 'seconds' ? value * 1000 : value * 60 * 1000;
-        return { action: 'record_video', payload: { duration } };
-    }
 
 
-    if (patterns.SET_NAME.test(command)) {
-        const payload = command.match(patterns.SET_NAME)?.[1];
-        if (captureMode === CaptureMode.CONTACT) return { action: 'set_contact_name', payload };
-        if (captureMode === CaptureMode.CONFIRMATION) return { action: 'set_confirmation_name', payload };
-    }
-    
-    const lowerCaseCommand = command.toLowerCase().trim();
-    switch (lowerCaseCommand) {
-        case 'commands list': case 'show commands': return { action: 'show_commands' };
-        case 'close list': case 'hide commands': return { action: 'hide_commands' };
-        case 'show contacts': return { action: 'show_contacts' };
-        case 'load my contacts': return { action: 'load_contacts' };
-        case 'open camera': case 'open media': return { action: 'show_media' };
-        case 'show calendar': return { action: 'show_calendar' };
-        case 'return to main': case 'close panels': return { action: 'show_main' };
-        case 'capture contact': return { action: 'capture_contact' };
-        case 'save contact': return { action: 'save_contact' };
-        case 'cancel contact': return { action: 'cancel_contact' };
-        case 'capture confirmation': return { action: 'capture_confirmation' };
-        case 'save confirmation': return { action: 'save_confirmation' };
-        case 'cancel confirmation': return { action: 'cancel_confirmation' };
-        case 'take a picture': case 'take a photo': return { action: 'take_photos', payload: { count: 1 } };
-        case 'record sound': return { action: 'record_audio' };
-        case 'stop recording sound': return { action: 'stop_audio_recording' };
-        case 'stop recording': case 'stop recording video': return { action: 'stop_recording' };
-        case 'switch camera': return { action: 'switch_camera' };
-    }
+    // View Management
+    const [activeView, setActiveView] = useState<View>(View.COMMANDS);
 
-    if (lowerCaseCommand.startsWith('record video')) return { action: 'record_video', payload: {} };
-
-    return { action: 'unknown', payload: command };
-};
-
-const App: React.FC = () => {
-    const [uiMode, setUiMode] = useState<UIMode>(UIMode.MAIN);
-    const [captureMode, setCaptureMode] = useState<CaptureMode>(CaptureMode.GENERAL);
-    const [showCommands, setShowCommands] = useState(false);
-    
-    const [contacts, setContacts] = useState<Contact[]>([]);
-    const [newContact, setNewContact] = useState<Partial<Contact>>({});
-    const [confirmations, setConfirmations] = useState<Confirmation[]>([]);
-    const [newConfirmation, setNewConfirmation] = useState<Partial<Confirmation>>({});
+    // Data Management
+    const [contacts, setContacts] = useState<Contact[]>(() => {
+        const saved = localStorage.getItem('contacts');
+        return saved ? JSON.parse(saved) : [];
+    });
+    const [reminders, setReminders] = useState<Reminder[]>(() => {
+        const saved = localStorage.getItem('reminders');
+        return saved ? JSON.parse(saved) : [];
+    });
     const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
-    const [reminders, setReminders] = useState<Reminder[]>([]);
+    const [confirmations, setConfirmations] = useState<Confirmation[]>(() => {
+        const saved = localStorage.getItem('confirmations');
+        const parsed = saved ? JSON.parse(saved) : [];
+        return parsed.map((c: any) => ({...c, timestamp: new Date(c.timestamp)})); // ensure date object
+    });
+    const [transcriptions, setTranscriptions] = useState<Transcription[]>([]);
+    const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+
+    // State for UI interaction and forms
+    const [isRecordingMedia, setIsRecordingMedia] = useState(false);
+    const [captureMode, setCaptureMode] = useState<CaptureMode>(CaptureMode.GENERAL);
+    const [newContactData, setNewContactData] = useState<Partial<Contact>>({});
+    const [newConfirmationData, setNewConfirmationData] = useState<Partial<Confirmation>>({});
     const [activeContactQuery, setActiveContactQuery] = useState<string | null>(null);
-
-    
     const [mediaCommand, setMediaCommand] = useState<MediaCommand | null>(null);
-    const [isRecording, setIsRecording] = useState(false);
-    
-    const { isListening, transcript, startListening, stopListening } = useSpeechRecognition();
 
-    const handleSaveContact = useCallback(() => {
-        if (newContact.name) {
-            const phoneUrl = newContact.phone ? `tel:${newContact.phone.replace(/\s/g, '')}` : undefined;
-            const emailUrl = newContact.email ? `mailto:${newContact.email}` : undefined;
-            setContacts(prev => [...prev, { id: Date.now().toString(), status: 'offline', ...newContact, phoneUrl, emailUrl } as Contact]);
-            setNewContact({});
-            setCaptureMode(CaptureMode.GENERAL);
-        }
-    }, [newContact]);
-
-    const handleCancelContact = useCallback(() => {
-        setNewContact({});
-        setCaptureMode(CaptureMode.GENERAL);
-    }, []);
-
-    const handleSaveConfirmation = useCallback(() => {
-        if (newConfirmation.type && newConfirmation.name && newConfirmation.number) {
-            setConfirmations(prev => [...prev, { id: Date.now().toString(), ...newConfirmation } as Confirmation]);
-            setNewConfirmation({});
-            setCaptureMode(CaptureMode.GENERAL);
-        }
-    }, [newConfirmation]);
-
-    const handleCancelConfirmation = useCallback(() => {
-        setNewConfirmation({});
-        setCaptureMode(CaptureMode.GENERAL);
-    }, []);
-    
-    const handleImportContacts = useCallback((importedContacts: Omit<Contact, 'id' | 'status'>[]) => {
-        const newContacts = importedContacts.map(c => ({
-            ...c,
-            id: `imported-${c.name}-${c.phone || c.email}`,
-            status: 'offline' as const
-        }));
-        // Basic de-duplication
-        setContacts(prev => {
-            const existing = new Set(prev.map(c => `${c.name}|${c.phone}`));
-            const uniqueNew = newContacts.filter(c => !existing.has(`${c.name}|${c.phone}`));
-            return [...prev, ...uniqueNew];
-        });
-    }, []);
-
-    const handleCaptureMedia = (item: Omit<MediaItem, 'id' | 'timestamp'>) => {
-        setMediaItems(prev => [...prev, { id: Date.now().toString(), timestamp: new Date(), ...item }]);
-    };
+    const { transcript, startListening, stopListening, isListening, error: speechError } = useSpeechRecognition();
 
     useEffect(() => {
-        if (transcript) {
-            (async () => {
-                const result = await processCommand(transcript, captureMode);
-                console.log("Parsed command:", result);
+        localStorage.setItem('contacts', JSON.stringify(contacts));
+    }, [contacts]);
 
-                switch(result.action) {
-                    case 'show_commands': setShowCommands(true); break;
-                    case 'hide_commands': setShowCommands(false); break;
-                    case 'show_contacts': setUiMode(UIMode.CONTACTS); break;
-                    case 'load_contacts': setContacts(MOCK_CONTACTS); break;
-                    case 'show_media': setUiMode(UIMode.MEDIA); break;
-                    case 'show_calendar': setUiMode(UIMode.CALENDAR); break;
-                    case 'show_main':
-                        setUiMode(UIMode.MAIN);
-                        setCaptureMode(CaptureMode.GENERAL);
-                        break;
-                    case 'capture_contact':
-                         setUiMode(UIMode.CONTACTS);
-                         setCaptureMode(CaptureMode.CONTACT);
-                         break;
-                    case 'save_contact': handleSaveContact(); break;
-                    case 'cancel_contact': handleCancelContact(); break;
-                    case 'capture_confirmation':
-                         setUiMode(UIMode.CONTACTS);
-                         setCaptureMode(CaptureMode.CONFIRMATION);
-                         break;
-                    case 'save_confirmation': handleSaveConfirmation(); break;
-                    case 'cancel_confirmation': handleCancelConfirmation(); break;
-                    case 'add_reminder':
-                        setReminders(prev => [...prev, { id: Date.now().toString(), text: result.payload, timestamp: new Date() }]);
-                        // Optionally show a confirmation toast
-                        break;
-                    case 'call_contact': case 'email_contact':
-                        setUiMode(UIMode.CONTACTS);
-                        setActiveContactQuery(result.payload);
-                        break;
-                    case 'set_contact_name':
-                        if (captureMode === CaptureMode.CONTACT) setNewContact(c => ({...c, name: result.payload}));
-                        break;
-                    case 'set_confirmation_name':
-                         if (captureMode === CaptureMode.CONFIRMATION) setNewConfirmation(c => ({...c, name: result.payload}));
-                        break;
-                    case 'set_contact_phone':
-                        if (captureMode === CaptureMode.CONTACT) setNewContact(c => ({...c, phone: result.payload}));
-                        break;
-                    case 'set_contact_email':
-                        if (captureMode === CaptureMode.CONTACT) setNewContact(c => ({...c, email: result.payload}));
-                        break;
-                    case 'set_contact_details':
-                        if (captureMode === CaptureMode.CONTACT) setNewContact(c => ({...c, details: result.payload}));
-                        break;
-                    case 'set_confirmation_type':
-                        if (captureMode === CaptureMode.CONFIRMATION) setNewConfirmation(c => ({...c, type: result.payload}));
-                        break;
-                    case 'set_confirmation_number':
-                        if (captureMode === CaptureMode.CONFIRMATION) setNewConfirmation(c => ({...c, number: result.payload}));
-                        break;
-                    case 'take_photos':
-                         if (uiMode !== UIMode.MEDIA) setUiMode(UIMode.MEDIA);
-                         setMediaCommand({ type: 'take-photos', count: result.payload.count, timer: result.payload.timer });
-                        break;
-                    case 'take_photo_timer':
-                        if (uiMode !== UIMode.MEDIA) setUiMode(UIMode.MEDIA);
-                        setMediaCommand({ type: 'take-photo-timer', duration: result.payload.duration });
-                        break;
-                    case 'record_video':
-                        if (uiMode !== UIMode.MEDIA) setUiMode(UIMode.MEDIA);
-                        setMediaCommand({ type: 'record-video', duration: result.payload.duration });
-                        break;
-                    case 'record_audio':
-                        if (uiMode !== UIMode.MEDIA) setUiMode(UIMode.MEDIA);
-                        setMediaCommand({ type: 'record-audio' });
-                        break;
-                    case 'stop_audio_recording':
-                        if (uiMode === UIMode.MEDIA) setMediaCommand({ type: 'stop-audio-recording' });
-                        break;
-                    case 'stop_recording':
-                        if (uiMode === UIMode.MEDIA) setMediaCommand({ type: 'stop-recording' });
-                        break;
-                    case 'switch_camera':
-                        if (uiMode === UIMode.MEDIA) setMediaCommand({ type: 'switch-camera' });
-                        break;
-                }
-            })();
+    useEffect(() => {
+        localStorage.setItem('confirmations', JSON.stringify(confirmations));
+    }, [confirmations]);
+    
+    useEffect(() => {
+        localStorage.setItem('reminders', JSON.stringify(reminders));
+    }, [reminders]);
+
+
+    const addTranscription = useCallback((text: string, type: 'user' | 'system' | 'model') => {
+        if (!text.trim()) return;
+        const newTranscription: Transcription = {
+            id: Date.now().toString(),
+            text,
+            timestamp: new Date(),
+            type,
+        };
+        setTranscriptions(prev => [...prev, newTranscription]);
+    }, []);
+
+    useEffect(() => {
+        if (speechError) {
+            addTranscription(`Speech recognition error: ${speechError}`, 'system');
         }
-    }, [transcript, captureMode, handleSaveContact, handleCancelContact, handleSaveConfirmation, handleCancelConfirmation, uiMode]);
+    }, [speechError, addTranscription]);
+    
+    const commandTools: FunctionDeclaration[] = useMemo(() => [
+        {
+            name: 'openView',
+            description: 'Opens a specific view or panel in the application.',
+            parameters: {
+                type: Type.OBJECT,
+                properties: {
+                    view: { type: Type.STRING, description: 'The name of the view to open. Can be "contacts", "media", "calendar", "analysis", "commands", or "assistant".' }
+                },
+                required: ['view']
+            }
+        },
+        {
+            name: 'closeView',
+            description: 'Closes the currently active view or panel.',
+            parameters: { type: Type.OBJECT, properties: {} }
+        },
+        {
+            name: 'loadContacts',
+            description: 'Loads a predefined list of mock contacts into the contacts view.',
+            parameters: { type: Type.OBJECT, properties: {} }
+        },
+        {
+            name: 'findContact',
+            description: 'Finds and displays the details of a specific contact by name or number.',
+            parameters: {
+                type: Type.OBJECT, properties: {
+                    query: { type: Type.STRING, description: 'The name or index number of the contact to find (e.g., "Jane Doe" or "contact 1").' }
+                }, required: ['query']
+            }
+        },
+        {
+            name: 'captureContact',
+            description: 'Starts the process of capturing a new contact and pre-fills data if provided.',
+            parameters: {
+                type: Type.OBJECT, properties: {
+                    name: { type: Type.STRING },
+                    phone: { type: Type.STRING },
+                    email: { type: Type.STRING },
+                    details: { type: Type.STRING }
+                }
+            }
+        },
+        {
+            name: 'captureConfirmation',
+            description: 'Starts the process of capturing a new confirmation number and pre-fills data.',
+            parameters: {
+                type: Type.OBJECT, properties: {
+                    type: { type: Type.STRING, description: 'The type of confirmation, e.g., "hotel", "flight", "order".' },
+                    name: { type: Type.STRING, description: 'The name associated with the confirmation.' },
+                    number: { type: Type.STRING, description: 'The confirmation number or code.' }
+                }
+            }
+        },
+        {
+            name: 'saveCapture',
+            description: 'Saves the currently captured contact or confirmation.',
+            parameters: { type: Type.OBJECT, properties: {} }
+        },
+        {
+            name: 'cancelCapture',
+            description: 'Cancels the current contact or confirmation capture process.',
+            parameters: { type: Type.OBJECT, properties: {} }
+        },
+        {
+            name: 'mediaAction',
+            description: 'Controls the media capture view for taking photos or recording videos and audio.',
+            parameters: {
+                type: Type.OBJECT, properties: {
+                    action: { type: Type.STRING, description: 'The action to perform: "take-photo", "take-photos", "take-photo-timer", "record-video", "record-audio", "stop-recording", "stop-audio-recording", "switch-camera".' },
+                    count: { type: Type.NUMBER, description: 'The number of photos to take for the "take-photos" action.' },
+                    duration: { type: Type.NUMBER, description: 'Duration in seconds for a timer ("take-photo-timer", "take-photos") or recording ("record-video").' }
+                }, required: ['action']
+            }
+        },
+        {
+            name: 'addReminder',
+            description: 'Adds a new reminder to the calendar.',
+            parameters: {
+                type: Type.OBJECT, properties: {
+                    text: { type: Type.STRING, description: 'The content of the reminder.' }
+                }, required: ['text']
+            }
+        },
+        {
+            name: 'clearTranscription',
+            description: 'Clears the entire transcription log.',
+            parameters: { type: Type.OBJECT, properties: {} }
+        }
+    ], []);
 
-    const handleToggleListen = () => {
-        isListening ? stopListening() : startListening();
-    };
+    const handleFunctionCall = useCallback((fc: FunctionCall) => {
+        const { name, args } = fc;
+        console.log('Executing function call:', name, args);
+        switch (name) {
+            case 'openView':
+                const viewMap: { [key: string]: View } = {
+                    'contacts': View.CONTACTS,
+                    'media': View.MEDIA,
+                    'calendar': View.CALENDAR,
+                    'analysis': View.ANALYSIS,
+                    'commands': View.COMMANDS,
+                    'assistant': View.AI_ASSISTANT,
+                };
+                if (args.view && viewMap[args.view as string]) {
+                    setActiveView(viewMap[args.view as string]);
+                }
+                break;
+            case 'closeView':
+                setActiveView(View.NONE);
+                break;
+            case 'loadContacts':
+                setContacts(MOCK_CONTACTS);
+                addTranscription('Loaded mock contacts.', 'system');
+                break;
+            case 'findContact':
+                if (args.query) {
+                    setActiveView(View.CONTACTS);
+                    setActiveContactQuery(args.query as string);
+                }
+                break;
+            case 'captureContact':
+                setActiveView(View.CONTACTS);
+                setCaptureMode(CaptureMode.CONTACT);
+                setNewContactData({ name: args.name as string, phone: args.phone as string, email: args.email as string, details: args.details as string });
+                break;
+            case 'captureConfirmation':
+                setActiveView(View.CONTACTS);
+                setCaptureMode(CaptureMode.CONFIRMATION);
+                setNewConfirmationData({ type: args.type as string, name: args.name as string, number: args.number as string });
+                break;
+            case 'saveCapture':
+                if (captureMode === CaptureMode.CONTACT) handleSaveContact();
+                else if (captureMode === CaptureMode.CONFIRMATION) handleSaveConfirmation();
+                break;
+            case 'cancelCapture':
+                if (captureMode === CaptureMode.CONTACT) handleCancelContact();
+                else if (captureMode === CaptureMode.CONFIRMATION) handleCancelConfirmation();
+                break;
+            case 'mediaAction':
+                setActiveView(View.MEDIA);
+                const action = args.action as string;
+                const durationInSeconds = args.duration ? Number(args.duration) : undefined;
+                
+                if (action === 'take-photo') {
+                    setMediaCommand({ type: 'take-photos', count: 1 });
+                } else if (action === 'take-photo-timer') {
+                    setMediaCommand({ type: 'take-photo-timer', duration: durationInSeconds || 5 });
+                } else if (action === 'take-photos') {
+                    setMediaCommand({ type: 'take-photos', count: Number(args.count) || 1, timer: durationInSeconds });
+                } else if (action === 'record-video') {
+                    const durationInMs = durationInSeconds ? durationInSeconds * 1000 : undefined;
+                    setMediaCommand({ type: 'record-video', duration: durationInMs });
+                } else if (action === 'record-audio') {
+                    setMediaCommand({ type: 'record-audio' });
+                } else if (action === 'stop-recording') {
+                    setMediaCommand({ type: 'stop-recording' });
+                } else if (action === 'stop-audio-recording') {
+                    setMediaCommand({ type: 'stop-audio-recording' });
+                } else if (action === 'switch-camera') {
+                    setMediaCommand({ type: 'switch-camera' });
+                }
+                break;
+            case 'addReminder':
+                if (args.text) {
+                    const newReminder: Reminder = { id: Date.now().toString(), text: args.text as string, timestamp: new Date() };
+                    setReminders(prev => [...prev, newReminder]);
+                    addTranscription(`Reminder set: "${args.text}"`, 'system');
+                }
+                break;
+            case 'clearTranscription':
+                setTranscriptions([]);
+                break;
+            default:
+                addTranscription(`Unknown command: ${name}`, 'system');
+        }
+    }, [captureMode]); // Dependencies will be added for handlers
+
+    const processCommand = useCallback(async (text: string) => {
+        if (!text || !ai) return;
+        try {
+            const response = await ai.models.generateContent({
+                model: commandParsingModel,
+                contents: [{ parts: [{ text: `Parse and execute the desired function call for the following user command: "${text}"` }] }],
+                config: {
+                    tools: [{ functionDeclarations: commandTools }]
+                }
+            });
+
+            if (response.functionCalls && response.functionCalls.length > 0) {
+                response.functionCalls.forEach(handleFunctionCall);
+            } else {
+                 if (response.text) {
+                    addTranscription(response.text, 'model');
+                 } else {
+                    addTranscription("I'm not sure how to handle that. Try 'show commands'.", 'model');
+                 }
+            }
+        } catch (e) {
+            console.error("Error processing command with Gemini:", e);
+            addTranscription("Sorry, I had trouble understanding that.", 'system');
+        }
+    }, [commandTools, handleFunctionCall, addTranscription, ai]);
+    
+    useEffect(() => {
+        if (transcript) {
+            addTranscription(transcript, 'user');
+            processCommand(transcript);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [transcript]);
+
+
+    // Handler Functions
+    const handleSaveContact = useCallback(() => {
+        if (newContactData.name) {
+            const newContact: Contact = {
+                id: Date.now().toString(),
+                name: newContactData.name,
+                phone: newContactData.phone,
+                email: newContactData.email,
+                details: newContactData.details,
+                status: 'offline', // default status
+            };
+            setContacts(prev => [...prev, newContact]);
+            addTranscription(`Contact "${newContact.name}" saved.`, 'system');
+            setCaptureMode(CaptureMode.GENERAL);
+            setNewContactData({});
+        } else {
+            addTranscription('Cannot save contact without a name.', 'system');
+        }
+    }, [newContactData, addTranscription]);
+    
+    const handleCancelContact = useCallback(() => {
+        setCaptureMode(CaptureMode.GENERAL);
+        setNewContactData({});
+        addTranscription('Contact capture cancelled.', 'system');
+    }, [addTranscription]);
+
+    const handleSaveConfirmation = useCallback(() => {
+        if (newConfirmationData.number) {
+            const newConf: Confirmation = {
+                id: Date.now().toString(),
+                timestamp: new Date(),
+                type: newConfirmationData.type || 'General',
+                name: newConfirmationData.name || 'N/A',
+                number: newConfirmationData.number,
+            };
+            setConfirmations(prev => [...prev, newConf]);
+            addTranscription(`Confirmation #${newConf.number} saved.`, 'system');
+            setCaptureMode(CaptureMode.GENERAL);
+            setNewConfirmationData({});
+        }
+    }, [newConfirmationData, addTranscription]);
+
+    const handleCancelConfirmation = useCallback(() => {
+        setCaptureMode(CaptureMode.GENERAL);
+        setNewConfirmationData({});
+        addTranscription('Confirmation capture cancelled.', 'system');
+    }, [addTranscription]);
+
+    const handleImportContacts = useCallback((imported: Omit<Contact, 'id' | 'status'>[]) => {
+        const newContacts = imported.map(c => ({
+            ...c,
+            id: `imported-${Date.now()}-${Math.random()}`,
+            status: 'offline' as const
+        }));
+        setContacts(prev => [...prev, ...newContacts]);
+        addTranscription(`Imported ${newContacts.length} contacts.`, 'system');
+    }, [addTranscription]);
+
+    const handleCaptureMedia = useCallback((item: Omit<MediaItem, 'id'|'timestamp'>) => {
+        const newMediaItem: MediaItem = {
+            ...item,
+            id: Date.now().toString(),
+            timestamp: new Date(),
+        };
+        setMediaItems(prev => [...prev, newMediaItem]);
+        addTranscription(`Captured new ${item.type}.`, 'system');
+    }, [addTranscription]);
+
+    const handleAnalyzeText = useCallback(async (text: string) => {
+        setAnalysisResult(null); // Clear previous results
+        if (!text.trim()) {
+            return "Please enter some text to analyze.";
+        }
+        if (!ai) {
+             return "AI client not initialized. Please check your API key.";
+        }
+        try {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: [{ parts: [{ text: `Analyze the following text and extract any contacts (name, phone, email), calendar events (description, date, time), and confirmation numbers (type, associated name, number). Text: "${text}"`}]}],
+                config: {
+                    responseMimeType: 'application/json',
+                    responseSchema: {
+                        type: Type.OBJECT,
+                        properties: {
+                            contacts: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        name: { type: Type.STRING },
+                                        phone: { type: Type.STRING },
+                                        email: { type: Type.STRING },
+                                    }
+                                }
+                            },
+                            events: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        description: { type: Type.STRING },
+                                        date: { type: Type.STRING, description: "Date of the event, e.g., 'Tomorrow', 'Friday', '2024-08-15'" },
+                                        time: { type: Type.STRING, description: "Time of the event, e.g., '3pm', '15:00'" },
+                                    }
+                                }
+                            },
+                            confirmations: {
+                                type: Type.ARRAY,
+                                items: {
+                                    type: Type.OBJECT,
+                                    properties: {
+                                        type: { type: Type.STRING, description: "e.g., 'Flight', 'Order', 'Hotel'" },
+                                        name: { type: Type.STRING, description: "Name associated with the confirmation" },
+                                        number: { type: Type.STRING, description: "The confirmation code" },
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            const resultJson = JSON.parse(response.text);
+            setAnalysisResult(resultJson);
+            return null; // success
+        } catch (e) {
+            console.error("Error analyzing text with Gemini:", e);
+            return "Sorry, I had trouble analyzing that text. The structure might be too complex.";
+        }
+    }, [ai]);
+
+    const handleAddExtractedContact = useCallback((contact: {name?: string, phone?: string, email?: string}) => {
+        const newContact: Contact = {
+            id: Date.now().toString(),
+            name: contact.name || 'N/A',
+            phone: contact.phone,
+            email: contact.email,
+            status: 'offline',
+        };
+        setContacts(prev => [...prev, newContact]);
+        addTranscription(`Added contact "${newContact.name}" from analysis.`, 'system');
+    }, [addTranscription]);
+
+    const handleAddExtractedEvent = useCallback((event: {description?: string, date?: string, time?: string}) => {
+        const reminderText = `${event.description || 'Event'}${event.date ? ` on ${event.date}` : ''}${event.time ? ` at ${event.time}` : ''}`;
+        const newReminder: Reminder = {
+            id: Date.now().toString(),
+            text: reminderText,
+            timestamp: new Date()
+        };
+        setReminders(prev => [...prev, newReminder]);
+        addTranscription(`Added reminder "${reminderText}" from analysis.`, 'system');
+    }, [addTranscription]);
+
+    const handleAddExtractedConfirmation = useCallback((conf: {type?: string, name?: string, number?: string}) => {
+        const newConf: Confirmation = {
+            id: Date.now().toString(),
+            timestamp: new Date(),
+            type: conf.type || 'General',
+            name: conf.name || 'N/A',
+            number: conf.number || 'Unknown',
+        };
+        setConfirmations(prev => [...prev, newConf]);
+        addTranscription(`Added confirmation #${newConf.number} from analysis.`, 'system');
+    }, [addTranscription]);
+
+
+    if (!ai) {
+        return <ApiKeySetup onKeySubmit={handleKeySubmit} />;
+    }
 
     return (
-        <div className="bg-slate-900 h-screen text-white font-sans flex flex-col md:flex-row overflow-hidden">
+        <div className="bg-slate-900 min-h-screen font-sans text-white">
             <Toolbar
+                activeView={activeView}
+                setActiveView={setActiveView}
                 isListening={isListening}
-                onToggleListen={handleToggleListen}
-                onSetUiMode={setUiMode}
-                currentUiMode={uiMode}
-                isRecording={isRecording}
+                isRecording={isRecordingMedia}
+                startListening={startListening}
+                stopListening={stopListening}
             />
-            <div className="relative flex-grow h-full">
-                 <main className="p-6 md:p-8 h-full pb-24 md:pb-8 overflow-y-auto">
-                    <h1 className="text-4xl font-bold mb-2">AI Voice Assistant</h1>
-                    <p className="text-slate-400">Say <code className="bg-slate-700 text-teal-300 px-1.5 py-0.5 rounded">'commands list'</code> to see available voice commands.</p>
-                    
-                    <div className="mt-8 p-4 bg-slate-800/50 rounded-lg min-h-[6rem] flex items-center justify-center flex-col shadow-inner">
-                        {isListening ? (
-                            <>
-                                <div className="text-2xl text-red-500 animate-pulse">Listening...</div>
-                                {transcript && (
-                                    <p className="text-slate-400 mt-2 text-center">
-                                        Last command: <span className="text-white font-mono bg-slate-700 px-2 py-1 rounded">{transcript}</span>
-                                    </p>
-                                )}
-                            </>
-                        ) : (
-                             <div className="text-center text-xl text-slate-500">
-                                {uiMode === UIMode.MAIN ? "Press 'Start' to begin." : "Voice recognition is off. Press 'Start' to enable."}
-                            </div>
-                        )}
+            <main className="relative md:ml-20 h-screen overflow-y-auto pb-20 md:pb-0">
+                {activeView === View.NONE && (
+                    <div className="p-4 md:p-8">
+                        <h1 className="text-3xl font-light mb-2">AI Voice Assistant</h1>
+                        <p className="text-slate-400">Use your voice to control the interface. Say "show commands" to get started.</p>
+                         <div className="mt-8 p-6 bg-slate-800/50 rounded-lg">
+                             <h2 className="text-xl font-bold text-teal-400 mb-4">Listening Status</h2>
+                             <div className="flex items-center gap-4">
+                                 <div className={`w-16 h-16 rounded-full flex items-center justify-center text-3xl ${isListening ? 'bg-red-500 animate-pulse' : 'bg-slate-700'}`}>
+                                     <i className="fas fa-microphone"></i>
+                                 </div>
+                                 <div>
+                                    <p className={`text-2xl font-semibold ${isListening ? 'text-red-400' : 'text-slate-400'}`}>{isListening ? 'Listening...' : 'Not Listening'}</p>
+                                    <p className="text-slate-500">Last command: <code className="bg-slate-700 rounded px-2 py-1">{transcript || '...'}</code></p>
+                                 </div>
+                             </div>
+                         </div>
                     </div>
-                </main>
+                )}
+
                 <ContactsView
-                    show={uiMode === UIMode.CONTACTS}
-                    onClose={() => setUiMode(UIMode.MAIN)}
+                    show={activeView === View.CONTACTS}
+                    onClose={() => setActiveView(View.NONE)}
                     captureMode={captureMode}
                     setCaptureMode={setCaptureMode}
                     contacts={contacts}
                     onImportContacts={handleImportContacts}
-                    newContactData={newContact}
+                    newContactData={newContactData}
                     onSave={handleSaveContact}
                     onCancel={handleCancelContact}
-                    newConfirmationData={newConfirmation}
+                    newConfirmationData={newConfirmationData}
                     onSaveConfirmation={handleSaveConfirmation}
                     onCancelConfirmation={handleCancelConfirmation}
                     activeContactQuery={activeContactQuery}
                     onQueryHandled={() => setActiveContactQuery(null)}
                 />
                 <MediaView
-                    show={uiMode === UIMode.MEDIA}
-                    onClose={() => {
-                        setUiMode(UIMode.MAIN);
-                        setMediaCommand(null);
-                    }}
+                    show={activeView === View.MEDIA}
+                    onClose={() => { setActiveView(View.NONE); setMediaCommand(null); }}
                     onCaptureMedia={handleCaptureMedia}
-                    onRecordingStateChange={setIsRecording}
+                    onRecordingStateChange={setIsRecordingMedia}
                     command={mediaCommand}
                     onCommandComplete={() => setMediaCommand(null)}
                     mediaItems={mediaItems}
                 />
                 <CalendarView
-                    show={uiMode === UIMode.CALENDAR}
-                    onClose={() => setUiMode(UIMode.MAIN)}
+                    show={activeView === View.CALENDAR}
+                    onClose={() => setActiveView(View.NONE)}
                     reminders={reminders}
                 />
-            </div>
-            <CommandsList
-                show={showCommands}
-                onClose={() => setShowCommands(false)}
-            />
+                <AnalysisView 
+                    show={activeView === View.ANALYSIS}
+                    onClose={() => setActiveView(View.NONE)}
+                    transcriptions={transcriptions}
+                />
+                 <AiAssistantView
+                    show={activeView === View.AI_ASSISTANT}
+                    onClose={() => setActiveView(View.NONE)}
+                    onAnalyzeText={handleAnalyzeText}
+                    result={analysisResult}
+                    onAddContact={handleAddExtractedContact}
+                    onAddEvent={handleAddExtractedEvent}
+                    onAddConfirmation={handleAddExtractedConfirmation}
+                />
+                <CommandsList 
+                    show={activeView === View.COMMANDS}
+                    onClose={() => setActiveView(View.NONE)}
+                />
+            </main>
         </div>
     );
-};
+}
+
 export default App;
