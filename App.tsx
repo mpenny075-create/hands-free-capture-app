@@ -18,7 +18,15 @@ const commandParsingModel = 'gemini-2.5-flash';
 
 function App() {
     const [ai, setAi] = useState<GoogleGenAI | null>(null);
-    const [apiKey, setApiKey] = useState<string | null>(() => localStorage.getItem('gemini-api-key'));
+    const [apiKey, setApiKey] = useState<string | null>(null);
+
+    // DEPLOYMENT FIX: Load API key from localStorage only on the client side.
+    useEffect(() => {
+        const savedKey = localStorage.getItem('gemini-api-key');
+        if (savedKey) {
+            setApiKey(savedKey);
+        }
+    }, []);
 
     // Initialize AI client when API key is available
     useEffect(() => {
@@ -28,7 +36,6 @@ function App() {
                 setAi(genAi);
             } catch (e) {
                 console.error("Failed to initialize GoogleGenAI:", e);
-                // Handle invalid key case
                 localStorage.removeItem('gemini-api-key');
                 setApiKey(null);
                 alert("The saved API Key appears to be invalid. Please enter it again.");
@@ -41,24 +48,35 @@ function App() {
         setApiKey(key);
     };
 
-
     // View Management
     const [activeView, setActiveView] = useState<View>(View.COMMANDS);
 
     // Data Management
-    const [contacts, setContacts] = useState<Contact[]>(() => {
-        const saved = localStorage.getItem('contacts');
-        return saved ? JSON.parse(saved) : [];
-    });
+    const [contacts, setContacts] = useState<Contact[]>([]);
     const [reminders, setReminders] = useState<Reminder[]>([]);
     const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
-    const [confirmations, setConfirmations] = useState<Confirmation[]>(() => {
-        const saved = localStorage.getItem('confirmations');
-        const parsed = saved ? JSON.parse(saved) : [];
-        return parsed.map((c: any) => ({...c, timestamp: new Date(c.timestamp)})); // ensure date object
-    });
+    const [confirmations, setConfirmations] = useState<Confirmation[]>([]);
     const [transcriptions, setTranscriptions] = useState<Transcription[]>([]);
     const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
+
+    // DEPLOYMENT FIX: Load data from localStorage only on the client side.
+    useEffect(() => {
+        try {
+            const savedContacts = localStorage.getItem('contacts');
+            if (savedContacts) setContacts(JSON.parse(savedContacts));
+
+            const savedConfirmations = localStorage.getItem('confirmations');
+            if (savedConfirmations) {
+                 const parsed = JSON.parse(savedConfirmations);
+                 setConfirmations(parsed.map((c: any) => ({...c, timestamp: new Date(c.timestamp)})));
+            }
+        } catch (error) {
+            console.error("Failed to load data from localStorage", error);
+            // Clear corrupted data if parsing fails
+            localStorage.removeItem('contacts');
+            localStorage.removeItem('confirmations');
+        }
+    }, []);
 
     // State for UI interaction and forms
     const [isRecordingMedia, setIsRecordingMedia] = useState(false);
